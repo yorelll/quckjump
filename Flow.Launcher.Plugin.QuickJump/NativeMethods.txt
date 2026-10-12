@@ -6,7 +6,10 @@ FindWindowEx
 GetWindowLong
 WINDOW_STYLE
 EnumWindows
+EnumChildWindows
+GetParent
 WM_COPYDATA
 COPYDATASTRUCT
 IsWindowVisible
+IsWindow
 GetWindowThreadProcessId

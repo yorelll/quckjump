@@ -26,7 +26,7 @@ public sealed class AliasGeneratorTests
     [Fact]
     public void CreateDefault_UsesFallbackWhenSanitizationLeavesNothing()
     {
-        Assert.Equal("entry", AliasGenerator.CreateDefault(@"C:\docs\!!!.txt", CustomEntryType.File, []));
+        Assert.Equal("条目", AliasGenerator.CreateDefault(@"C:\docs\!!!.txt", CustomEntryType.File, []));
     }
 
     [Fact]

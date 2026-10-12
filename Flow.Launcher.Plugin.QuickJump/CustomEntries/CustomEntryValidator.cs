@@ -6,15 +6,14 @@ using System.Text.RegularExpressions;
 
 namespace Flow.Launcher.Plugin.QuickJump.CustomEntries;
 
-/// <summary>Validates aliases and verifies that custom-entry paths match their declared type.</summary>
+/// <summary>验证别名并确保自定义条目路径与自动识别出的类型一致。</summary>
 internal static partial class CustomEntryValidator
 {
     private const int AliasMaximumLength = 120;
 
     /// <summary>
-    /// Accepts Unicode letters/numbers plus hyphen and underscore. This includes
-    /// Chinese, English, and other alphabetic scripts without treating whitespace
-    /// or punctuation as valid alias characters.
+    /// 接受 Unicode 字母/数字、连字符和下划线，因而支持中文、英文及其他文字，
+    /// 同时拒绝空格和其他标点符号。
     /// </summary>
     [GeneratedRegex("^[\\p{L}\\p{N}_-]+$", RegexOptions.CultureInvariant)]
     private static partial Regex AliasPattern();
@@ -23,24 +22,24 @@ internal static partial class CustomEntryValidator
     {
         if (string.IsNullOrWhiteSpace(alias))
         {
-            return "Alias is required.";
+            return "别名不能为空。";
         }
 
         if (alias.Length > AliasMaximumLength)
         {
-            return $"Alias must be {AliasMaximumLength} characters or fewer.";
+            return $"别名长度不能超过 {AliasMaximumLength} 个字符。";
         }
 
         return AliasPattern().IsMatch(alias)
             ? null
-            : "Alias may contain only letters, numbers, hyphens, and underscores; spaces and special characters are not allowed.";
+            : "别名只能包含字母、数字、连字符和下划线，不能包含空格或特殊字符。";
     }
 
     public static string? ValidatePath(string? path, CustomEntryType type)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return "Path is required.";
+            return "路径不能为空。";
         }
 
         try
@@ -49,15 +48,15 @@ internal static partial class CustomEntryValidator
         }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            return "Path is not a valid Windows path.";
+            return "路径不是有效的 Windows 路径。";
         }
 
-        return type switch
+        if (!PathTypeDetector.TryDetect(path, out var detectedType, out var error))
         {
-            CustomEntryType.File when !File.Exists(path) => "The selected file does not exist.",
-            CustomEntryType.Folder when !Directory.Exists(path) => "The selected folder does not exist.",
-            _ => null,
-        };
+            return error;
+        }
+
+        return detectedType == type ? null : "路径类型已变化，请重新保存以自动识别类型。";
     }
 
     public static string? Validate(CustomEntry entry, IEnumerable<CustomEntry> existingEntries, string? originalAlias = null)
@@ -80,6 +79,6 @@ internal static partial class CustomEntryValidator
         var duplicate = existingEntries.Any(existing =>
             !string.Equals(existing.Alias, originalAlias, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(existing.Alias, entry.Alias, StringComparison.OrdinalIgnoreCase));
-        return duplicate ? $"An entry with alias '{entry.Alias}' already exists." : null;
+        return duplicate ? $"别名“{entry.Alias}”已存在。" : null;
     }
 }

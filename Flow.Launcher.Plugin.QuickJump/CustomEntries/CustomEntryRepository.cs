@@ -5,7 +5,7 @@ using Flow.Launcher.Plugin.QuickJump.Settings;
 
 namespace Flow.Launcher.Plugin.QuickJump.CustomEntries;
 
-/// <summary>Validates and mutates the custom entries owned by Flow's settings storage.</summary>
+/// <summary>验证并修改由 Flow 设置存储拥有的自定义条目。</summary>
 internal sealed class CustomEntryRepository
 {
     private readonly Settings.Settings _settings;
@@ -46,7 +46,7 @@ internal sealed class CustomEntryRepository
             string.Equals(entry.Alias, originalAlias, StringComparison.OrdinalIgnoreCase));
         if (existing is null)
         {
-            error = $"Custom entry '{originalAlias}' no longer exists.";
+            error = $"自定义跳转“{originalAlias}”已不存在。";
             return false;
         }
 
@@ -91,7 +91,7 @@ internal sealed class CustomEntryRepository
             string.Equals(item.Alias, alias, StringComparison.OrdinalIgnoreCase));
         if (entry is null)
         {
-            error = $"Custom entry '{alias}' no longer exists.";
+            error = $"自定义跳转“{alias}”已不存在。";
             return false;
         }
 

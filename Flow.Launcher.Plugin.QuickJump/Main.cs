@@ -11,12 +11,13 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.WindowsAndMessaging;
 using Flow.Launcher.Plugin.QuickJump.CustomEntries;
+using Flow.Launcher.Plugin.QuickJump.DialogNavigation;
 using Flow.Launcher.Plugin.QuickJump.FileManager;
 using Flow.Launcher.Plugin.QuickJump.Settings;
 
 namespace Flow.Launcher.Plugin.QuickJump;
 
-/// <summary>Fills active Windows file dialogs from open folders or user-managed quick entries.</summary>
+/// <summary>将已打开的文件夹或自定义条目填入活动 Windows 文件对话框。</summary>
 public class QuickJump : IPlugin, IContextMenu, ISettingProvider
 {
     private const string LogTag = "QuickJump";
@@ -24,6 +25,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
     private Settings.Settings? _settings;
     private CustomEntryRepository? _customEntries;
     private readonly QuickEntrySearchService _searchService = new();
+    private readonly CustomEntryDialogPresenter _customEntryDialogPresenter = new();
 
     public void Init(PluginInitContext context)
     {
@@ -36,9 +38,12 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
     {
         if (_context is null || _customEntries is null)
         {
-            throw new UnreachableException(); // Guaranteed by the caller after Init.
+            throw new UnreachableException(); // Init 后由 Flow 保证调用。
         }
 
+        // Flow 取得焦点后，原生文件对话框通常仍可见但不在前台。尽早缓存其
+        // HWND，后续操作不再仅依赖“当前前台窗口”，从而兼容 VS Code 等宿主。
+        var capturedDialog = DialogWindowLocator.CaptureVisibleFileDialog();
         var parsedQuery = QuickJumpQuery.Parse(query.Search);
         var results = _searchService.Search(
             parsedQuery,
@@ -46,35 +51,35 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
             GetNativeEntries(),
             (search, value) => _context.API.FuzzySearch(search, value).Success);
 
-        // Flow currently orders by Score; spaced scores retain a deterministic
-        // order even where multiple host results share an internal rank.
+        // Flow 以 Score 排序；间隔分数保留确定性顺序。
         const int step = 10_000;
-        return results.Select((result, index) => ToFlowResult(result, int.MaxValue - index * step)).ToList();
+        return results.Select((result, index) => ToFlowResult(result, int.MaxValue - index * step, capturedDialog)).ToList();
     }
 
     public List<Result> LoadContextMenus(Result selectedResult)
     {
-        if (selectedResult.ContextData is not QuickEntryResult entry)
+        if (selectedResult.ContextData is not QuickJumpResultContext context)
         {
             return [];
         }
 
+        var entry = context.Entry;
         var jumpAction = new Result
         {
-            Title = "Jump",
+            Title = "跳转",
             SubTitle = entry.Path,
             IcoPath = IconFor(entry),
-            Action = _ => JumpAction(entry.Path, entry.Type),
+            Action = _ => JumpAction(entry.Path, entry.Type, context.CapturedDialog),
         };
         var showAction = new Result
         {
-            Title = "Show the path",
+            Title = "显示路径",
             IcoPath = "icon.png",
             Action = _ => ShowAction(entry.Path),
         };
         var copyAction = new Result
         {
-            Title = "Copy the path",
+            Title = "复制路径",
             IcoPath = "icon.png",
             Action = _ => CopyAction(entry.Path),
         };
@@ -84,8 +89,8 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
         {
             actions.Add(new Result
             {
-                Title = "Add to custom entries",
-                SubTitle = "Create a persistent file or folder shortcut",
+                Title = "添加到自定义跳转",
+                SubTitle = "创建一个持久化的文件或文件夹快捷方式",
                 IcoPath = "icon.png",
                 Action = _ => AddToCustomEntries(entry.Path),
             });
@@ -104,18 +109,21 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
         return fileManagers.SelectMany(manager => manager.GetEntries());
     }
 
-    private Result ToFlowResult(QuickEntryResult entry, int score)
+    private Result ToFlowResult(QuickEntryResult entry, int score, HWND capturedDialog)
     {
-        string typeLabel = entry.IsCustom ? $"Custom {entry.Type}" : entry.IsLiteral ? "Path" : "Open folder";
+        string typeLabel = entry.IsCustom
+            ? entry.Type == CustomEntryType.File ? "自定义文件" : "自定义文件夹"
+            : entry.IsLiteral ? "输入路径" : "已打开的文件夹";
+        var resultContext = new QuickJumpResultContext(entry, capturedDialog);
         return new Result
         {
             Title = entry.Title,
-            SubTitle = $"{typeLabel}: {entry.Path}",
+            SubTitle = $"{typeLabel}：{entry.Path}",
             IcoPath = IconFor(entry),
             Action = ctx => ctx.SpecialKeyState.CtrlPressed
                 ? CopyAction(entry.Path)
-                : JumpAction(entry.Path, entry.Type),
-            ContextData = entry,
+                : JumpAction(entry.Path, entry.Type, capturedDialog),
+            ContextData = resultContext,
             Score = score,
         };
     }
@@ -143,34 +151,32 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
             return false;
         }
 
-        if (!File.Exists(path) && !Directory.Exists(path))
+        if (!PathTypeDetector.TryDetect(path, out _, out var error))
         {
-            _context?.API.ShowMsg("Only an existing file or folder can be added to custom entries.");
+            _context?.API.ShowMsg(error ?? "只有现有文件或文件夹可以添加到自定义跳转。");
             return false;
         }
 
-        var dialog = new CustomEntryEditorDialog(_customEntries, initialPath: path)
-        {
-            Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive),
-        };
-        dialog.ShowDialog();
+        // Context menus can be invoked while Flow owns a hidden or disabled
+        // window. The presenter creates and shows the dialog via WPF's UI
+        // dispatcher and avoids assigning such an invalid owner.
+        _customEntryDialogPresenter.ShowForPath(_customEntries, path, () =>
+            _context?.API.ShowMsg("已添加到自定义跳转。"));
         return false;
     }
 
-    private bool JumpAction(string path, CustomEntryType type)
+    private bool JumpAction(string path, CustomEntryType type, HWND capturedDialog)
     {
-        _context?.API.LogInfo(LogTag, $"Jumping to {path}");
+        _context?.API.LogInfo(LogTag, $"准备跳转到 {path}");
         var thread = new Thread(() =>
         {
-            // Jump after Flow Launcher has hidden and the file dialog is foreground.
-            bool timedOut = !SpinWait.SpinUntil(() => GetForegroundWindowClassName() == "#32770", 1000);
-            if (timedOut)
+            var dialogHandle = DialogWindowLocator.WaitForTarget(capturedDialog);
+            if (dialogHandle == HWND.Null)
             {
-                _context?.API.LogWarn(LogTag, "Dialog window not found");
+                _context?.API.LogWarn(LogTag, "未找到可用的 Windows 文件对话框；已完成有界重试。");
                 return;
             }
 
-            var dialogHandle = PInvoke.GetForegroundWindow();
             if (type == CustomEntryType.File)
             {
                 FileJump(path, dialogHandle);
@@ -184,25 +190,17 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         return true;
-
-        static string? GetForegroundWindowClassName() => Utils.GetClassName(PInvoke.GetForegroundWindow());
     }
 
     private void FolderJump(string path, HWND dialogHandle)
     {
         var inputSimulator = new WindowsInput.InputSimulator();
         FocusAddressBar(inputSimulator);
-        var editHandle = FindModernAddressEdit(dialogHandle);
+        var editHandle = WaitForModernAddressEdit(dialogHandle);
         if (editHandle == HWND.Null)
         {
-            _context?.API.LogWarn(LogTag, "Modern address edit control not found. Trying legacy dialog.");
+            _context?.API.LogWarn(LogTag, "未找到现代地址栏编辑框，尝试旧版文件对话框。");
             FolderJumpOnLegacyDialog(path, dialogHandle);
-            return;
-        }
-
-        if (!WaitForVisible(editHandle))
-        {
-            _context?.API.LogWarn(LogTag, "Address bar was not visible after navigation shortcut.");
             return;
         }
 
@@ -212,13 +210,12 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
 
     private void FileJump(string path, HWND dialogHandle)
     {
-        // Modern IFileDialog offers a filename Edit control after Ctrl+L/Alt+D.
-        // Setting the full path then Enter selects and confirms the file. If that
-        // control tree is unavailable, legacy FileName entry is handled below.
+        // 现代 IFileDialog 在地址栏获得焦点后可接受完整路径；对于不提供该
+        // 地址栏的旧对话框，单独使用“文件名”输入框并只确认一次。
         var inputSimulator = new WindowsInput.InputSimulator();
         FocusAddressBar(inputSimulator);
-        var editHandle = FindModernAddressEdit(dialogHandle);
-        if (editHandle != HWND.Null && WaitForVisible(editHandle))
+        var editHandle = WaitForModernAddressEdit(dialogHandle);
+        if (editHandle != HWND.Null)
         {
             Utils.SetWindowText(editHandle, path);
             inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
@@ -239,40 +236,114 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
         action();
     }
 
+    private static HWND WaitForModernAddressEdit(HWND dialogHandle)
+    {
+        var retryPlan = new DialogTargetRetryPlan(Attempts: 6, DelayMilliseconds: 100);
+        for (int attempt = 0; retryPlan.ShouldTry(attempt); attempt++)
+        {
+            var editHandle = FindModernAddressEdit(dialogHandle);
+            if (editHandle != HWND.Null && IsVisible(editHandle))
+            {
+                return editHandle;
+            }
+            if (attempt + 1 < retryPlan.Attempts)
+            {
+                Thread.Sleep(retryPlan.DelayMilliseconds);
+            }
+        }
+        return HWND.Null;
+    }
+
     private static HWND FindModernAddressEdit(HWND dialogHandle)
     {
-        var controlHandle = PInvoke.FindWindowEx(dialogHandle, HWND.Null, "WorkerW", null);
-        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ReBarWindow32", null);
-        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "Address Band Root", null);
-        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "msctls_progress32", null);
-        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ComboBoxEx32", null);
-        if (controlHandle == HWND.Null)
+        var comboExControls = FindDescendantControls(dialogHandle, "ComboBoxEx32");
+        var addressControls = comboExControls.Where(HasAddressBarAncestor).ToArray();
+        foreach (var control in addressControls)
+        {
+            var edit = FindAddressEditUnder(control);
+            if (edit != HWND.Null)
+            {
+                return edit;
+            }
+        }
+
+        // Some host applications build the standard dialog hierarchy without
+        // the usual Address Band Root. Fall back only if exactly one qualified
+        // ComboBoxEx/Edit path exists, never to an arbitrary Edit control.
+        if (addressControls.Length == 0 && comboExControls.Count == 1)
+        {
+            return FindAddressEditUnder(comboExControls[0]);
+        }
+        return HWND.Null;
+    }
+
+    private static List<HWND> FindDescendantControls(HWND dialogHandle, string className)
+    {
+        var controls = new List<HWND>();
+        PInvoke.EnumChildWindows(dialogHandle, EnumProc, 0);
+        return controls;
+
+        BOOL EnumProc(HWND window, LPARAM _)
+        {
+            if (string.Equals(Utils.GetClassName(window), className, StringComparison.Ordinal))
+            {
+                controls.Add(window);
+            }
+            return true;
+        }
+    }
+
+    private static bool HasAddressBarAncestor(HWND control)
+    {
+        var current = PInvoke.GetParent(control);
+        for (int depth = 0; depth < 12 && current != HWND.Null; depth++)
+        {
+            string? className = Utils.GetClassName(current);
+            if (string.Equals(className, "Address Band Root", StringComparison.Ordinal))
+            {
+                return true;
+            }
+            current = PInvoke.GetParent(current);
+        }
+        return false;
+    }
+
+    private static HWND FindAddressEditUnder(HWND comboExHandle)
+    {
+        var comboHandle = PInvoke.FindWindowEx(comboExHandle, HWND.Null, "ComboBox", null);
+        if (comboHandle == HWND.Null)
         {
             return HWND.Null;
         }
 
-        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ComboBox", null);
-        return PInvoke.FindWindowEx(controlHandle, HWND.Null, "Edit", null);
+        var editHandle = PInvoke.FindWindowEx(comboHandle, HWND.Null, "Edit", null);
+        return editHandle != HWND.Null && AddressEditDiscovery.IsAddressEditPath(["ComboBoxEx32", "ComboBox", "Edit"])
+            ? editHandle
+            : HWND.Null;
     }
 
-    private static bool WaitForVisible(HWND controlHandle) => SpinWait.SpinUntil(() =>
+    private static bool IsVisible(HWND controlHandle)
     {
+        if (!PInvoke.IsWindow(controlHandle))
+        {
+            return false;
+        }
         int style = PInvoke.GetWindowLong(controlHandle, WINDOW_LONG_PTR_INDEX.GWL_STYLE);
         return (style & (int)WINDOW_STYLE.WS_VISIBLE) != 0;
-    }, 1000);
+    }
 
     private void FolderJumpOnLegacyDialog(string path, HWND dialogHandle)
     {
         var editHandle = FindLegacyEdit(dialogHandle);
         if (editHandle == HWND.Null)
         {
-            _context?.API.LogWarn(LogTag, "Filename edit control not found on legacy dialog.");
+            _context?.API.LogWarn(LogTag, "旧版对话框中未找到文件名输入框。");
             return;
         }
 
         Utils.SetWindowText(editHandle, path);
         var inputSimulator = new WindowsInput.InputSimulator();
-        // A first Alt-O may only enter the current folder; a second confirms.
+        // 首次 Alt+O 可能只是进入文件夹，第二次才确认。
         inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LMENU, WindowsInput.VirtualKeyCode.VK_O);
         inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LMENU, WindowsInput.VirtualKeyCode.VK_O);
     }
@@ -282,22 +353,27 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
         var editHandle = FindLegacyEdit(dialogHandle);
         if (editHandle == HWND.Null)
         {
-            _context?.API.LogWarn(LogTag, "Filename edit control not found on legacy dialog.");
+            _context?.API.LogWarn(LogTag, "旧版对话框中未找到文件名输入框。");
             return;
         }
 
         Utils.SetWindowText(editHandle, path);
         var inputSimulator = new WindowsInput.InputSimulator();
-        // A file path in the filename input requires one confirmation, unlike a
-        // folder navigation where the first confirmation can change directory.
+        // 文件路径只需确认一次；文件夹路径则可能需要先进入目录。
         inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LMENU, WindowsInput.VirtualKeyCode.VK_O);
     }
 
     private static HWND FindLegacyEdit(HWND dialogHandle)
     {
         var controlHandle = PInvoke.FindWindowEx(dialogHandle, HWND.Null, "ComboBoxEx32", null);
+        if (controlHandle == HWND.Null)
+        {
+            return HWND.Null;
+        }
         controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ComboBox", null);
-        return PInvoke.FindWindowEx(controlHandle, HWND.Null, "Edit", null);
+        return controlHandle == HWND.Null
+            ? HWND.Null
+            : PInvoke.FindWindowEx(controlHandle, HWND.Null, "Edit", null);
     }
 
     public Control CreateSettingPanel()
@@ -312,4 +388,6 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
             _customEntries,
             () => _context.API.SaveSettingJsonStorage<Settings.Settings>());
     }
+
+    private sealed record QuickJumpResultContext(QuickEntryResult Entry, HWND CapturedDialog);
 }

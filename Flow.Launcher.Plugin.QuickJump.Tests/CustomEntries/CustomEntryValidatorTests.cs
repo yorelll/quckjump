@@ -24,9 +24,12 @@ public sealed class CustomEntryValidatorTests
     [InlineData("work/file")]
     [InlineData("C#")]
     [InlineData("hello!")]
-    public void ValidateAlias_RejectsEmptyWhitespaceAndSpecialCharacters(string alias)
+    public void ValidateAlias_RejectsEmptyWhitespaceAndSpecialCharactersWithChineseError(string alias)
     {
-        Assert.NotNull(CustomEntryValidator.ValidateAlias(alias));
+        var error = CustomEntryValidator.ValidateAlias(alias);
+
+        Assert.NotNull(error);
+        Assert.DoesNotContain("Alias", error!);
     }
 
     [Fact]
@@ -38,7 +41,7 @@ public sealed class CustomEntryValidatorTests
             var entry = new CustomEntry { Alias = "WORK", Path = temporaryFile, Type = CustomEntryType.File };
             var existing = new[] { new CustomEntry { Alias = "work", Path = temporaryFile, Type = CustomEntryType.File } };
 
-            Assert.Contains("already exists", CustomEntryValidator.Validate(entry, existing)!);
+            Assert.Contains("已存在", CustomEntryValidator.Validate(entry, existing)!);
         }
         finally
         {
@@ -47,10 +50,12 @@ public sealed class CustomEntryValidatorTests
     }
 
     [Fact]
-    public void ValidatePath_RejectsMissingPathOfDeclaredType()
+    public void ValidatePath_RejectsMissingPathWithChineseErrorForEitherDeclaredType()
     {
-        Assert.Equal("The selected file does not exist.", CustomEntryValidator.ValidatePath(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), CustomEntryType.File));
-        Assert.Equal("The selected folder does not exist.", CustomEntryValidator.ValidatePath(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), CustomEntryType.Folder));
+        string missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+
+        Assert.Contains("路径不存在", CustomEntryValidator.ValidatePath(missing, CustomEntryType.File)!);
+        Assert.Contains("路径不存在", CustomEntryValidator.ValidatePath(missing, CustomEntryType.Folder)!);
     }
 
     [Fact]
@@ -59,7 +64,7 @@ public sealed class CustomEntryValidatorTests
         var file = Path.GetTempFileName();
         try
         {
-            Assert.Equal("The selected folder does not exist.", CustomEntryValidator.ValidatePath(file, CustomEntryType.Folder));
+            Assert.Contains("路径类型", CustomEntryValidator.ValidatePath(file, CustomEntryType.Folder)!);
         }
         finally
         {

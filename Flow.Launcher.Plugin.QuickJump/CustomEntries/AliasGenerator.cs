@@ -9,7 +9,7 @@ namespace Flow.Launcher.Plugin.QuickJump.CustomEntries;
 /// <summary>Creates editable, safe default aliases for paths added from search results.</summary>
 internal static class AliasGenerator
 {
-    private const string EmptyAliasFallback = "entry";
+    private const string EmptyAliasFallback = "条目";
 
     public static string CreateDefault(string path, CustomEntryType type, IEnumerable<CustomEntry> existingEntries)
     {
