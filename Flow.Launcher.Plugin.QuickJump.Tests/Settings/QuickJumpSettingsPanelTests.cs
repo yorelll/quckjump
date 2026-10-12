@@ -18,7 +18,7 @@ public sealed class QuickJumpSettingsPanelTests : IDisposable
     {
         var details = RunOnSta(() =>
         {
-            var settings = new Settings();
+            var settings = new Flow.Launcher.Plugin.QuickJump.Settings.Settings();
             var path = CreateFile();
             settings.CustomEntries.Add(new CustomEntry { Alias = "report", Path = path, Type = CustomEntryType.File, Enabled = true });
             var panel = new QuickJumpSettingsPanel(settings, new CustomEntryRepository(settings, () => { }), () => { });
@@ -29,7 +29,7 @@ public sealed class QuickJumpSettingsPanelTests : IDisposable
         Assert.Equal(DataGridSelectionUnit.FullRow, details.Item1);
         Assert.Equal(DataGridSelectionMode.Single, details.Item2);
         Assert.True(details.Item3);
-        Assert.Equal(["Alias", "Path", "Type", "Enabled"], details.Item4);
+        Assert.Equal(new[] { "Alias", "Path", "Type", "Enabled" }, details.Item4);
         Assert.True(details.Item5);
     }
 

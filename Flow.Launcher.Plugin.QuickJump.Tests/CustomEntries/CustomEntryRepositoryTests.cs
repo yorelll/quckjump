@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Flow.Launcher.Plugin.QuickJump.CustomEntries;
 using Flow.Launcher.Plugin.QuickJump.Settings;
 using Xunit;
@@ -13,7 +14,7 @@ public sealed class CustomEntryRepositoryTests : IDisposable
     [Fact]
     public void AddUpdateToggleAndRemove_MutateSettingsAndSaveEachSuccessfulChange()
     {
-        var settings = new Settings();
+        var settings = new Flow.Launcher.Plugin.QuickJump.Settings.Settings();
         int saves = 0;
         var repository = new CustomEntryRepository(settings, () => saves++);
         var file = CreateFile("report.txt");
@@ -41,7 +42,7 @@ public sealed class CustomEntryRepositoryTests : IDisposable
     [Fact]
     public void FailedAdd_DoesNotMutateOrSave()
     {
-        var settings = new Settings();
+        var settings = new Flow.Launcher.Plugin.QuickJump.Settings.Settings();
         int saves = 0;
         var repository = new CustomEntryRepository(settings, () => saves++);
 
