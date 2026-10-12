@@ -1,7 +1,7 @@
 using Windows.Win32;
 using Windows.Win32.Foundation;
 
-namespace Flow.Launcher.Plugin.DirQuickJump;
+namespace Flow.Launcher.Plugin.QuickJump;
 
 internal static class Utils
 {

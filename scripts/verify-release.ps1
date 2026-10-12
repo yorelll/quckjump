@@ -32,8 +32,10 @@ $dllPath = Join-Path $stage $manifest.ExecuteFileName
 if (-not (Test-Path $dllPath)) {
     throw "Manifest executable '$($manifest.ExecuteFileName)' is missing from staging."
 }
-if (-not (Test-Path (Join-Path $stage 'icon.png'))) {
-    throw 'QuickJump release staging is missing icon.png.'
+foreach ($icon in @('icon.png', 'file.png', 'folder.png')) {
+    if (-not (Test-Path (Join-Path $stage $icon))) {
+        throw "QuickJump release staging is missing $icon."
+    }
 }
 
 $assemblies = @(Get-ChildItem -Path $stage -Filter '*.dll' -File)

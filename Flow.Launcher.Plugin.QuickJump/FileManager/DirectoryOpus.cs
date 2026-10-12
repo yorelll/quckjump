@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Xml;
 
-namespace Flow.Launcher.Plugin.DirQuickJump.FileManager;
+namespace Flow.Launcher.Plugin.QuickJump.FileManager;
 
 internal class DirectoryOpus : IFileManager
 {
@@ -18,7 +18,7 @@ internal class DirectoryOpus : IFileManager
         string? parent = Directory.GetParent(dopusPath)?.FullName;
         if (parent == null) return [];
         string rtPath = Path.Combine(parent, "dopusrt.exe");
-        string pathsXml = Path.Combine(Path.GetTempPath(), "DirQuickJump_dopus_paths.xml");
+        string pathsXml = Path.Combine(Path.GetTempPath(), "QuickJump_dopus_paths.xml");
         File.Delete(pathsXml);
         Process.Start(rtPath, ["/info", $"{pathsXml},paths"]).WaitForExit();
         var doc = new XmlDocument();

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows;
@@ -9,92 +10,119 @@ using System.Windows.Controls;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.WindowsAndMessaging;
-using Flow.Launcher.Plugin.DirQuickJump.FileManager;
-using Flow.Launcher.Plugin.DirQuickJump.Settings;
+using Flow.Launcher.Plugin.QuickJump.CustomEntries;
+using Flow.Launcher.Plugin.QuickJump.FileManager;
+using Flow.Launcher.Plugin.QuickJump.Settings;
 
-namespace Flow.Launcher.Plugin.DirQuickJump;
+namespace Flow.Launcher.Plugin.QuickJump;
 
-public class DirQuickJump : IPlugin, IContextMenu, ISettingProvider
+/// <summary>Fills active Windows file dialogs from open folders or user-managed quick entries.</summary>
+public class QuickJump : IPlugin, IContextMenu, ISettingProvider
 {
+    private const string LogTag = "QuickJump";
     private PluginInitContext? _context;
     private Settings.Settings? _settings;
+    private CustomEntryRepository? _customEntries;
+    private readonly QuickEntrySearchService _searchService = new();
 
     public void Init(PluginInitContext context)
     {
-        _context = context;
+        _context = context ?? throw new ArgumentNullException(nameof(context));
         _settings = context.API.LoadSettingJsonStorage<Settings.Settings>();
+        _customEntries = new CustomEntryRepository(_settings, () => context.API.SaveSettingJsonStorage<Settings.Settings>());
     }
 
     public List<Result> Query(Query query)
     {
-        if (_context is null) throw new UnreachableException(); // Guaranteed by the caller
+        if (_context is null || _customEntries is null)
+        {
+            throw new UnreachableException(); // Guaranteed by the caller after Init.
+        }
 
+        var parsedQuery = QuickJumpQuery.Parse(query.Search);
+        var results = _searchService.Search(
+            parsedQuery,
+            _customEntries.GetAll(),
+            GetNativeEntries(),
+            (search, value) => _context.API.FuzzySearch(search, value).Success);
+
+        // Flow currently orders by Score; spaced scores retain a deterministic
+        // order even where multiple host results share an internal rank.
+        const int step = 10_000;
+        return results.Select((result, index) => ToFlowResult(result, int.MaxValue - index * step)).ToList();
+    }
+
+    public List<Result> LoadContextMenus(Result selectedResult)
+    {
+        if (selectedResult.ContextData is not QuickEntryResult entry)
+        {
+            return [];
+        }
+
+        var jumpAction = new Result
+        {
+            Title = "Jump",
+            SubTitle = entry.Path,
+            IcoPath = IconFor(entry),
+            Action = _ => JumpAction(entry.Path, entry.Type),
+        };
+        var showAction = new Result
+        {
+            Title = "Show the path",
+            IcoPath = "icon.png",
+            Action = _ => ShowAction(entry.Path),
+        };
+        var copyAction = new Result
+        {
+            Title = "Copy the path",
+            IcoPath = "icon.png",
+            Action = _ => CopyAction(entry.Path),
+        };
+
+        var actions = new List<Result> { jumpAction, showAction, copyAction };
+        if (!entry.IsCustom)
+        {
+            actions.Add(new Result
+            {
+                Title = "Add to custom entries",
+                SubTitle = "Create a persistent file or folder shortcut",
+                IcoPath = "icon.png",
+                Action = _ => AddToCustomEntries(entry.Path),
+            });
+        }
+        return actions;
+    }
+
+    private IEnumerable<Entry> GetNativeEntries()
+    {
         List<IFileManager> fileManagers = [
             new Explorer(),
             new DirectoryOpus(),
             new XYplorer(),
             new OneCommander(),
         ];
-
-        var entries = fileManagers
-            .SelectMany(manager => manager.GetEntries())
-            .Where(e =>
-                query.Search.Trim() == "" ||
-                _context.API.FuzzySearch(query.Search, e.Name).Success ||
-                _context.API.FuzzySearch(query.Search, e.Path).Success
-            );
-
-        if (query.Search.Trim() != "")
-        {
-            string literalPath = query.Search;
-            entries = entries.Append(new Entry(literalPath, literalPath));
-        }
-
-        // https://github.com/Flow-Launcher/Flow.Launcher/discussions/2993
-        const int step = 10000;
-        return entries.Select((entry, i) =>
-        {
-            (string name, string path) = entry;
-            return new Result
-            {
-                Title = name,
-                SubTitle = path,
-                IcoPath = "icon.png",
-                Action = ctx => ctx.SpecialKeyState.CtrlPressed switch
-                {
-                    true => CopyAction(path),
-                    _ => JumpAction(path),
-                },
-                ContextData = path,
-                Score = int.MaxValue - i * step,
-            };
-        }).ToList();
+        return fileManagers.SelectMany(manager => manager.GetEntries());
     }
 
-    public List<Result> LoadContextMenus(Result selectedResult)
+    private Result ToFlowResult(QuickEntryResult entry, int score)
     {
-        var path = (string)selectedResult.ContextData;
-        var jumpAction = new Result
+        string typeLabel = entry.IsCustom ? $"Custom {entry.Type}" : entry.IsLiteral ? "Path" : "Open folder";
+        return new Result
         {
-            Title = "Jump",
-            SubTitle = path,
-            IcoPath = "icon.png",
-            Action = _ => JumpAction(path),
+            Title = entry.Title,
+            SubTitle = $"{typeLabel}: {entry.Path}",
+            IcoPath = IconFor(entry),
+            Action = ctx => ctx.SpecialKeyState.CtrlPressed
+                ? CopyAction(entry.Path)
+                : JumpAction(entry.Path, entry.Type),
+            ContextData = entry,
+            Score = score,
         };
-        var showAction = new Result
-        {
-            Title = "Show the path",
-            IcoPath = "icon.png",
-            Action = _ => ShowAction(path),
-        };
-        var copyAction = new Result
-        {
-            Title = "Copy the path",
-            IcoPath = "icon.png",
-            Action = _ => CopyAction(path),
-        };
-        return [jumpAction, showAction, copyAction];
     }
+
+    private static string IconFor(QuickEntryResult entry) => entry.IsCustom
+        ? entry.Type == CustomEntryType.File ? "file.png" : "folder.png"
+        : "icon.png";
 
     private bool ShowAction(string text)
     {
@@ -108,78 +136,82 @@ public class DirQuickJump : IPlugin, IContextMenu, ISettingProvider
         return true;
     }
 
-    private bool JumpAction(string path)
+    private bool AddToCustomEntries(string path)
     {
-        _context?.API.LogInfo("DirQuickJump", $"Jumping to {path}");
-        var t = new Thread(() =>
+        if (_customEntries is null)
         {
-            // Jump after flow launcher window vanished (after JumpAction returned true)
-            // and the dialog had been in the foreground. The class name of a dialog window is "#32770".
-            bool timeOut = !SpinWait.SpinUntil(() => GetForegroundWindowClassName() == "#32770", 1000);
-            if (timeOut)
+            return false;
+        }
+
+        CustomEntryType type;
+        if (File.Exists(path))
+        {
+            type = CustomEntryType.File;
+        }
+        else if (Directory.Exists(path))
+        {
+            type = CustomEntryType.Folder;
+        }
+        else
+        {
+            _context?.API.ShowMsg("Only an existing file or folder can be added to custom entries.");
+            return false;
+        }
+
+        var dialog = new CustomEntryEditorDialog(_customEntries, initialPath: path)
+        {
+            Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive),
+        };
+        dialog.ShowDialog();
+        return false;
+    }
+
+    private bool JumpAction(string path, CustomEntryType type)
+    {
+        _context?.API.LogInfo(LogTag, $"Jumping to {path}");
+        var thread = new Thread(() =>
+        {
+            // Jump after Flow Launcher has hidden and the file dialog is foreground.
+            bool timedOut = !SpinWait.SpinUntil(() => GetForegroundWindowClassName() == "#32770", 1000);
+            if (timedOut)
             {
-                _context?.API.LogWarn("DirQuickJump", "Dialog window not found");
+                _context?.API.LogWarn(LogTag, "Dialog window not found");
                 return;
             }
 
-            ;
-            // Assume that the dialog is in the foreground now
-            DirJump(path, PInvoke.GetForegroundWindow());
+            var dialogHandle = PInvoke.GetForegroundWindow();
+            if (type == CustomEntryType.File)
+            {
+                FileJump(path, dialogHandle);
+            }
+            else
+            {
+                FolderJump(path, dialogHandle);
+            }
         });
-        t.Start();
+        thread.IsBackground = true;
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
         return true;
 
-        static string? GetForegroundWindowClassName()
-        {
-            var handle = PInvoke.GetForegroundWindow();
-            return Utils.GetClassName(handle);
-        }
+        static string? GetForegroundWindowClassName() => Utils.GetClassName(PInvoke.GetForegroundWindow());
     }
 
-    private void DirJump(string path, HWND dialogHandle)
+    private void FolderJump(string path, HWND dialogHandle)
     {
-        // Alt-D or Ctrl-L to focus on the path input box
         var inputSimulator = new WindowsInput.InputSimulator();
-        Action action = _settings?.Strategy switch
-        {
-            Strategy.AltD => () => inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LMENU,
-                WindowsInput.VirtualKeyCode.VK_D),
-            Strategy.CtrlL => () => inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LCONTROL,
-                WindowsInput.VirtualKeyCode.VK_L),
-            _ => () => throw new UnreachableException(),
-        };
-        action();
-
-        // Get the handle of the path input box and then set the text.
-        // The window with class name "ComboBoxEx32" is not visible when the path input box is not with the keyboard focus.
-        var controlHandle = PInvoke.FindWindowEx(dialogHandle, HWND.Null, "WorkerW", null);
-        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ReBarWindow32", null);
-        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "Address Band Root", null);
-        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "msctls_progress32", null);
-        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ComboBoxEx32", null);
-        if (controlHandle == HWND.Null)
-        {
-            _context?.API.LogWarn("DirQuickJump", "ComboBoxEx32 not found. Maybe a legacy dialog?");
-            DirJumpOnLegacyDialog(path, dialogHandle);
-            return;
-        }
-
-        bool timeOut = !SpinWait.SpinUntil(() =>
-        {
-            int style = PInvoke.GetWindowLong(controlHandle, WINDOW_LONG_PTR_INDEX.GWL_STYLE);
-            return (style & (int)WINDOW_STYLE.WS_VISIBLE) != 0;
-        }, 1000);
-        if (timeOut)
-        {
-            _context?.API.LogWarn("DirQuickJump", $"Alt-D or Ctrl-L failed. ComboBoxEx32 handle: {controlHandle}");
-            return;
-        }
-
-        var editHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ComboBox", null);
-        editHandle = PInvoke.FindWindowEx(editHandle, HWND.Null, "Edit", null);
+        FocusAddressBar(inputSimulator);
+        var editHandle = FindModernAddressEdit(dialogHandle);
         if (editHandle == HWND.Null)
         {
-            _context?.API.LogWarn("DirQuickJump", "Edit control at address bar not found");
+            _context?.API.LogWarn(LogTag, "Modern address edit control not found. Trying legacy dialog.");
+            FolderJumpOnLegacyDialog(path, dialogHandle);
+            return;
+        }
+
+        if (!WaitForVisible(editHandle))
+        {
+            _context?.API.LogWarn(LogTag, "Address bar was not visible after navigation shortcut.");
             return;
         }
 
@@ -187,74 +219,106 @@ public class DirQuickJump : IPlugin, IContextMenu, ISettingProvider
         inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
     }
 
-    private void DirJumpOnLegacyDialog(string path, HWND dialogHandle)
+    private void FileJump(string path, HWND dialogHandle)
     {
-        // https://github.com/idkidknow/Flow.Launcher.Plugin.DirQuickJump/issues/1
-        var controlHandle = PInvoke.FindWindowEx(dialogHandle, HWND.Null, "ComboBoxEx32", null);
-        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ComboBox", null);
-        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "Edit", null);
-        if (controlHandle == HWND.Null)
+        // Modern IFileDialog offers a filename Edit control after Ctrl+L/Alt+D.
+        // Setting the full path then Enter selects and confirms the file. If that
+        // control tree is unavailable, legacy FileName entry is handled below.
+        var inputSimulator = new WindowsInput.InputSimulator();
+        FocusAddressBar(inputSimulator);
+        var editHandle = FindModernAddressEdit(dialogHandle);
+        if (editHandle != HWND.Null && WaitForVisible(editHandle))
         {
-            _context?.API.LogWarn("DirQuickJump", "Filename edit control not found");
+            Utils.SetWindowText(editHandle, path);
+            inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
             return;
         }
 
-        Utils.SetWindowText(controlHandle, path);
+        FileJumpOnLegacyDialog(path, dialogHandle);
+    }
+
+    private void FocusAddressBar(WindowsInput.InputSimulator inputSimulator)
+    {
+        Action action = _settings?.Strategy switch
+        {
+            Strategy.AltD => () => inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LMENU, WindowsInput.VirtualKeyCode.VK_D),
+            Strategy.CtrlL => () => inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LCONTROL, WindowsInput.VirtualKeyCode.VK_L),
+            _ => () => throw new UnreachableException(),
+        };
+        action();
+    }
+
+    private static HWND FindModernAddressEdit(HWND dialogHandle)
+    {
+        var controlHandle = PInvoke.FindWindowEx(dialogHandle, HWND.Null, "WorkerW", null);
+        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ReBarWindow32", null);
+        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "Address Band Root", null);
+        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "msctls_progress32", null);
+        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ComboBoxEx32", null);
+        if (controlHandle == HWND.Null)
+        {
+            return HWND.Null;
+        }
+
+        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ComboBox", null);
+        return PInvoke.FindWindowEx(controlHandle, HWND.Null, "Edit", null);
+    }
+
+    private static bool WaitForVisible(HWND controlHandle) => SpinWait.SpinUntil(() =>
+    {
+        int style = PInvoke.GetWindowLong(controlHandle, WINDOW_LONG_PTR_INDEX.GWL_STYLE);
+        return (style & (int)WINDOW_STYLE.WS_VISIBLE) != 0;
+    }, 1000);
+
+    private void FolderJumpOnLegacyDialog(string path, HWND dialogHandle)
+    {
+        var editHandle = FindLegacyEdit(dialogHandle);
+        if (editHandle == HWND.Null)
+        {
+            _context?.API.LogWarn(LogTag, "Filename edit control not found on legacy dialog.");
+            return;
+        }
+
+        Utils.SetWindowText(editHandle, path);
         var inputSimulator = new WindowsInput.InputSimulator();
-        // Alt-O (equivalent to press the Open button) twice. In normal cases it suffices to press once,
-        // but when the focus is on an irrelevant folder, that press once will just open the irrelevant one.
+        // A first Alt-O may only enter the current folder; a second confirms.
         inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LMENU, WindowsInput.VirtualKeyCode.VK_O);
         inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LMENU, WindowsInput.VirtualKeyCode.VK_O);
     }
 
-    #region Settings GUI
+    private void FileJumpOnLegacyDialog(string path, HWND dialogHandle)
+    {
+        var editHandle = FindLegacyEdit(dialogHandle);
+        if (editHandle == HWND.Null)
+        {
+            _context?.API.LogWarn(LogTag, "Filename edit control not found on legacy dialog.");
+            return;
+        }
+
+        Utils.SetWindowText(editHandle, path);
+        var inputSimulator = new WindowsInput.InputSimulator();
+        // A file path in the filename input requires one confirmation, unlike a
+        // folder navigation where the first confirmation can change directory.
+        inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LMENU, WindowsInput.VirtualKeyCode.VK_O);
+    }
+
+    private static HWND FindLegacyEdit(HWND dialogHandle)
+    {
+        var controlHandle = PInvoke.FindWindowEx(dialogHandle, HWND.Null, "ComboBoxEx32", null);
+        controlHandle = PInvoke.FindWindowEx(controlHandle, HWND.Null, "ComboBox", null);
+        return PInvoke.FindWindowEx(controlHandle, HWND.Null, "Edit", null);
+    }
 
     public Control CreateSettingPanel()
     {
-        var control = new UserControl();
-        var grid = new Grid();
-        var gridCol1 = new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) };
-        var gridCol2 = new ColumnDefinition();
-        grid.ColumnDefinitions.Add(gridCol1);
-        grid.ColumnDefinitions.Add(gridCol2);
-        var text = new TextBlock
+        if (_settings is null || _customEntries is null || _context is null)
         {
-            Text = "How to navigate to the path",
-            Margin = new Thickness(70, 9, 18, 9),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            TextAlignment = TextAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(text, 0);
-        var comboBox = new ComboBox
-        {
-            ItemsSource = new[] { "Alt-D", "Ctrl-L" },
-            SelectedItem = _settings?.Strategy switch
-            {
-                Strategy.AltD => "Alt-D",
-                Strategy.CtrlL => "Ctrl-L",
-                _ => "Alt-D",
-            },
-            IsEditable = false,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 9, 18, 9),
-        };
-        Grid.SetColumn(comboBox, 1);
-        comboBox.DropDownClosed += (_, _) =>
-        {
-            _settings!.Strategy = comboBox.Text switch
-            {
-                "Alt-D" => Strategy.AltD,
-                "Ctrl-L" => Strategy.CtrlL,
-                _ => throw new UnreachableException(),
-            };
-        };
-        grid.Children.Add(text);
-        grid.Children.Add(comboBox);
-        control.Content = grid;
-        return control;
-    }
+            throw new UnreachableException();
+        }
 
-    #endregion
+        return new QuickJumpSettingsPanel(
+            _settings,
+            _customEntries,
+            () => _context.API.SaveSettingJsonStorage<Settings.Settings>());
+    }
 }

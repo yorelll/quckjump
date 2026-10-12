@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Flow.Launcher.Plugin.DirQuickJump.FileManager;
+namespace Flow.Launcher.Plugin.QuickJump.FileManager;
 
 internal class Explorer : IFileManager
 {

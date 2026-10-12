@@ -8,7 +8,7 @@ using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Exceptions;
 using FlaUI.UIA3;
 
-namespace Flow.Launcher.Plugin.DirQuickJump.FileManager;
+namespace Flow.Launcher.Plugin.QuickJump.FileManager;
 
 internal class OneCommander : IFileManager
 {

@@ -1,4 +1,4 @@
-namespace Flow.Launcher.Plugin.DirQuickJump.Settings;
+namespace Flow.Launcher.Plugin.QuickJump.Settings;
 
 internal enum Strategy
 {

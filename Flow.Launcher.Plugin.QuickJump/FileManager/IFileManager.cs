@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Flow.Launcher.Plugin.DirQuickJump.FileManager;
+namespace Flow.Launcher.Plugin.QuickJump.FileManager;
 
 internal interface IFileManager
 {

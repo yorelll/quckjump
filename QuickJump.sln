@@ -5,6 +5,8 @@ VisualStudioVersion = 17.5.002.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Flow.Launcher.Plugin.QuickJump", "Flow.Launcher.Plugin.QuickJump\Flow.Launcher.Plugin.QuickJump.csproj", "{771F1A7C-CC92-4F1F-A29F-A0C72655A07D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flow.Launcher.Plugin.QuickJump.Tests", "Flow.Launcher.Plugin.QuickJump.Tests\Flow.Launcher.Plugin.QuickJump.Tests.csproj", "{C245C596-9E62-4E80-B058-822724FCE67A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{771F1A7C-CC92-4F1F-A29F-A0C72655A07D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{771F1A7C-CC92-4F1F-A29F-A0C72655A07D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{771F1A7C-CC92-4F1F-A29F-A0C72655A07D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C245C596-9E62-4E80-B058-822724FCE67A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C245C596-9E62-4E80-B058-822724FCE67A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C245C596-9E62-4E80-B058-822724FCE67A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C245C596-9E62-4E80-B058-822724FCE67A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

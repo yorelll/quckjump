@@ -8,7 +8,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.System.DataExchange;
 
-namespace Flow.Launcher.Plugin.DirQuickJump.FileManager;
+namespace Flow.Launcher.Plugin.QuickJump.FileManager;
 
 internal class XYplorer : IFileManager
 {
@@ -41,7 +41,7 @@ internal class XYplorer : IFileManager
 
     private static unsafe List<string> GetPaths(HWND hWnd)
     {
-        string tempFile = Path.Combine(Path.GetTempPath(), "DirQuickJump_xy_paths.txt")
+        string tempFile = Path.Combine(Path.GetTempPath(), "QuickJump_xy_paths.txt")
             .Replace(@"\", @"\\");
         var script = $$"""
                        ::
