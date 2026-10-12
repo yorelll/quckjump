@@ -1,0 +1,66 @@
+name: Verify QuickJump Package
+
+on:
+  push:
+    branches:
+      - main
+      - feature/**
+    paths:
+      - "Flow.Launcher.Plugin.QuickJump/**"
+      - "QuickJump.sln"
+      - "scripts/verify-release.ps1"
+      - ".github/workflows/package-check.yml"
+  pull_request:
+    paths:
+      - "Flow.Launcher.Plugin.QuickJump/**"
+      - "QuickJump.sln"
+      - "scripts/verify-release.ps1"
+      - ".github/workflows/package-check.yml"
+  workflow_dispatch:
+
+jobs:
+  package-check:
+    name: Verify directly-installable plugin archive
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "7.0.x"
+
+      - name: Restore, build, and test
+        run: |
+          dotnet restore QuickJump.sln
+          dotnet build QuickJump.sln --configuration Release --no-restore
+          dotnet test QuickJump.sln --configuration Release --no-build
+
+      - name: Stage QuickJump plugin
+        id: stage
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "QuickJump.Release"
+          Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item "Flow.Launcher.Plugin.QuickJump/bin/Release/*" $stage -Recurse -Force
+          "stage=$stage" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+
+      - name: Verify staged plugin
+        shell: pwsh
+        run: |
+          $manifest = Get-Content "Flow.Launcher.Plugin.QuickJump/plugin.json" -Raw | ConvertFrom-Json
+          ./scripts/verify-release.ps1 `
+            -StageDirectory "${{ steps.stage.outputs.stage }}" `
+            -ExpectedVersion "$($manifest.Version)"
+
+      - name: Archive checked plugin
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "${{ steps.stage.outputs.stage }}\*" -DestinationPath "QuickJump-package-check.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quickjump-package-check
+          path: QuickJump-package-check.zip

@@ -1,0 +1,12 @@
+{
+    "ID": "B3A7F2C4D91E4B6D8A0C5F7E9B2D1A3C",
+    "ActionKeyword": "cd",
+    "Name": "QuickJump",
+    "Description": "When opening or saving files, quickly jump to the directory or file you already opened in File Explorer. Supports custom file/folder quick entries with aliases. Inspired by Listary Quick Switch.",
+    "Author": "yorelll",
+    "Version": "1.0.0",
+    "Language": "csharp",
+    "Website": "https://github.com/yorelll/quckjump",
+    "IcoPath": "icon.png",
+    "ExecuteFileName": "Flow.Launcher.Plugin.QuickJump.dll"
+}

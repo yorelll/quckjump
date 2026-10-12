@@ -1,0 +1,12 @@
+GetForegroundWindow
+GetClassName
+SendMessage
+WM_SETTEXT
+FindWindowEx
+GetWindowLong
+WINDOW_STYLE
+EnumWindows
+WM_COPYDATA
+COPYDATASTRUCT
+IsWindowVisible
+GetWindowThreadProcessId
