@@ -19,4 +19,16 @@
   <ItemGroup>
     <ProjectReference Include="..\Flow.Launcher.Plugin.QuickJump\Flow.Launcher.Plugin.QuickJump.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Flow.Launcher.Plugin.QuickJump\icon.png" Link="icon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\Flow.Launcher.Plugin.QuickJump\file.png" Link="file.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\Flow.Launcher.Plugin.QuickJump\folder.png" Link="folder.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>
