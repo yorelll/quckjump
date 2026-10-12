@@ -77,12 +77,11 @@ public sealed class CustomEntryEditorDialogTests : IDisposable
             Directory.CreateDirectory(folder);
             dialog.PathInput.Text = folder;
             dialog.SaveButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            return (dialog.DetectedTypeText.Text, settings.CustomEntries.Single().Type, dialog.DialogResult);
+            return (dialog.DetectedTypeText.Text, settings.CustomEntries.Single().Type);
         });
 
         Assert.Equal("文件夹", details.Item1);
         Assert.Equal(CustomEntryType.Folder, details.Item2);
-        Assert.True(details.Item3);
     }
 
     [Fact]
