@@ -1,3 +1,4 @@
+using System;
 using Flow.Launcher.Plugin.QuickJump.CustomEntries;
 using Xunit;
 
@@ -6,12 +7,13 @@ namespace Flow.Launcher.Plugin.QuickJump.Tests.CustomEntries;
 public sealed class AliasGeneratorTests
 {
     [Theory]
-    [InlineData(@"C:\docs\My C# Notes.docx", CustomEntryType.File, "MyC-Notes")]
-    [InlineData(@"C:\docs\测试 文件夹", CustomEntryType.Folder, "测试-文件夹")]
-    [InlineData(@"C:\docs\  Work    Files  ", CustomEntryType.Folder, "Work-Files")]
-    [InlineData(@"C:\docs\-Already--hyphen-", CustomEntryType.Folder, "Already-hyphen")]
-    public void CreateDefault_SanitizesKnownNames(string path, CustomEntryType type, string expected)
+    [InlineData(@"C:\docs\My C# Notes.docx", "File", "MyC-Notes")]
+    [InlineData(@"C:\docs\测试 文件夹", "Folder", "测试-文件夹")]
+    [InlineData(@"C:\docs\  Work    Files  ", "Folder", "Work-Files")]
+    [InlineData(@"C:\docs\-Already--hyphen-", "Folder", "Already-hyphen")]
+    public void CreateDefault_SanitizesKnownNames(string path, string typeName, string expected)
     {
+        var type = Enum.Parse<CustomEntryType>(typeName);
         Assert.Equal(expected, AliasGenerator.CreateDefault(path, type, []));
     }
 

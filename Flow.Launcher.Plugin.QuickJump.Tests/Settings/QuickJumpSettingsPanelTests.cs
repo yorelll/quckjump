@@ -1,4 +1,6 @@
+using System;
 using System.Threading;
+using System.Linq;
 using System.Windows.Controls;
 using Flow.Launcher.Plugin.QuickJump.CustomEntries;
 using Flow.Launcher.Plugin.QuickJump.Settings;

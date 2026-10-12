@@ -1,3 +1,4 @@
+using System;
 using Flow.Launcher.Plugin.QuickJump.CustomEntries;
 using Xunit;
 
@@ -6,17 +7,17 @@ namespace Flow.Launcher.Plugin.QuickJump.Tests.CustomEntries;
 public sealed class QuickJumpQueryTests
 {
     [Theory]
-    [InlineData("/f report", "report", CustomEntryType.File, false, true)]
-    [InlineData("report /FD", "report", CustomEntryType.Folder, false, true)]
+    [InlineData("/f report", "report", "File", false, true)]
+    [InlineData("report /FD", "report", "Folder", false, true)]
     [InlineData("/s report", "report", null, true, true)]
-    [InlineData("report /s /f", "report", CustomEntryType.File, true, true)]
+    [InlineData("report /s /f", "report", "File", true, true)]
     [InlineData("/unknown report", "/unknown report", null, false, false)]
-    public void Parse_RecognizesFiltersInAnyOrderAndPreservesUnknownSlashTerms(string raw, string text, CustomEntryType? type, bool searchOnly, bool hasFilter)
+    public void Parse_RecognizesFiltersInAnyOrderAndPreservesUnknownSlashTerms(string raw, string text, string? typeName, bool searchOnly, bool hasFilter)
     {
         var parsed = QuickJumpQuery.Parse(raw);
 
         Assert.Equal(text, parsed.SearchText);
-        Assert.Equal(type, parsed.CustomTypeFilter);
+        Assert.Equal(typeName is null ? null : Enum.Parse<CustomEntryType>(typeName), parsed.CustomTypeFilter);
         Assert.Equal(searchOnly, parsed.SearchOnly);
         Assert.Equal(hasFilter, parsed.HasRecognizedFilter);
     }
