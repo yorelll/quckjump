@@ -7,7 +7,7 @@ namespace Flow.Launcher.Plugin.QuickJump.Tests.CustomEntries;
 public sealed class AliasGeneratorTests
 {
     [Theory]
-    [InlineData(@"C:\docs\My C# Notes.docx", "File", "MyC-Notes")]
+    [InlineData(@"C:\docs\My C# Notes.docx", "File", "My-C-Notes")]
     [InlineData(@"C:\docs\测试 文件夹", "Folder", "测试-文件夹")]
     [InlineData(@"C:\docs\  Work    Files  ", "Folder", "Work-Files")]
     [InlineData(@"C:\docs\-Already--hyphen-", "Folder", "Already-hyphen")]
@@ -20,7 +20,7 @@ public sealed class AliasGeneratorTests
     [Fact]
     public void CreateDefault_RemovesOnlyFinalFileExtension()
     {
-        Assert.Equal("release.tar", AliasGenerator.CreateDefault(@"C:\docs\release.tar.gz", CustomEntryType.File, []));
+        Assert.Equal("releasetar", AliasGenerator.CreateDefault(@"C:\docs\release.tar.gz", CustomEntryType.File, []));
     }
 
     [Fact]

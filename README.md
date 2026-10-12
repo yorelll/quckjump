@@ -49,7 +49,7 @@ When adding an entry from a search result, the default alias:
 4. retains Chinese/English characters, numbers, hyphens, and underscores;
 5. adds `-1`, `-2`, etc. if it conflicts with an existing alias.
 
-For example, `My C# Notes.docx` becomes `MyC-Notes`, and `测试 文件夹` becomes `测试-文件夹`.
+For example, `My C# Notes.docx` becomes `My-C-Notes`, and `测试 文件夹` becomes `测试-文件夹`.
 
 ## Supported file managers
 
