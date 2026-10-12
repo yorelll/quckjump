@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Flow.Launcher.Plugin.QuickJump.CustomEntries;
 using Flow.Launcher.Plugin.QuickJump.Settings;
 using Xunit;
