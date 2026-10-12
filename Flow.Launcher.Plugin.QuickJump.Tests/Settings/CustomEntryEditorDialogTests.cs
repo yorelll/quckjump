@@ -32,7 +32,7 @@ public sealed class CustomEntryEditorDialogTests : IDisposable
         {
             var dialog = CreateDialog();
             var buttons = dialog.LayoutGrid.Children.OfType<DockPanel>().SelectMany(panel => panel.Children.OfType<Button>()).ToArray();
-            return (buttons.Select(button => DependencyPropertyHelper.GetValueSource(button, ContentControl.ContentProperty).IsExpression).ToArray(), dialog.LayoutGrid.Children.OfType<ComboBox>().Count(), DependencyPropertyHelper.GetValueSource(dialog.TitleProperty).IsExpression);
+            return (buttons.Select(button => DependencyPropertyHelper.GetValueSource(button, ContentControl.ContentProperty).IsExpression).ToArray(), dialog.LayoutGrid.Children.OfType<ComboBox>().Count(), DependencyPropertyHelper.GetValueSource(dialog, Window.TitleProperty).IsExpression);
         });
         Assert.All(details.Item1, Assert.True); Assert.Equal(2, details.Item1.Length); Assert.Equal(0, details.Item2); Assert.True(details.Item3);
     }
