@@ -5,29 +5,20 @@ namespace Flow.Launcher.Plugin.QuickJump.Tests.DialogNavigation;
 
 public sealed class FileDialogStructureTests
 {
-    [Theory]
-    [InlineData("#32770", 1, 0, false, FileDialogKind.Modern)]
-    [InlineData("#32770", 0, 1, true, FileDialogKind.Legacy)]
-    [InlineData("#32770", 0, 1, false, FileDialogKind.None)]
-    [InlineData("#32770", 0, 0, true, FileDialogKind.None)]
-    [InlineData("#32770", 2, 0, true, FileDialogKind.None)]
-    [InlineData("#32770", 0, 2, true, FileDialogKind.None)]
-    [InlineData("ApplicationDialog", 1, 0, true, FileDialogKind.None)]
-    public void StructureClassification_RequiresConstrainedFileDialogEvidence(
-        string windowClass,
-        int modernAddressPathCount,
-        int legacyFileNamePathCount,
-        bool hasStandardConfirmButton,
-        FileDialogKind expected)
+    [Fact]
+    public void StructureClassification_RequiresConstrainedFileDialogEvidence()
     {
-        var structure = new FileDialogStructure(
-            windowClass,
-            modernAddressPathCount,
-            legacyFileNamePathCount,
-            hasStandardConfirmButton);
-
-        Assert.Equal(expected, structure.Classify());
+        Assert.Equal(FileDialogKind.Modern, Classify("#32770", modernPaths: 1, legacyPaths: 0, hasStandardConfirmButton: false));
+        Assert.Equal(FileDialogKind.Legacy, Classify("#32770", modernPaths: 0, legacyPaths: 1, hasStandardConfirmButton: true));
+        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 0, legacyPaths: 1, hasStandardConfirmButton: false));
+        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 0, legacyPaths: 0, hasStandardConfirmButton: true));
+        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 2, legacyPaths: 0, hasStandardConfirmButton: true));
+        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 0, legacyPaths: 2, hasStandardConfirmButton: true));
+        Assert.Equal(FileDialogKind.None, Classify("ApplicationDialog", modernPaths: 1, legacyPaths: 0, hasStandardConfirmButton: true));
     }
+
+    private static FileDialogKind Classify(string windowClass, int modernPaths, int legacyPaths, bool hasStandardConfirmButton) =>
+        new FileDialogStructure(windowClass, modernPaths, legacyPaths, hasStandardConfirmButton).Classify();
 
     [Fact]
     public void CandidateSelection_ExcludesGenericStandardDialogAndSelectsOnlyVerifiedFileDialog()
