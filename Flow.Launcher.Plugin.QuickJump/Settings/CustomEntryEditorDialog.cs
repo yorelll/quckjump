@@ -16,6 +16,7 @@ internal sealed class CustomEntryEditorDialog : Window
     private readonly ComboBox _type;
     private readonly CheckBox _enabled;
     private readonly TextBlock _error;
+    private readonly Button _save;
 
     public CustomEntryEditorDialog(CustomEntryRepository repository, CustomEntry? existing = null, string? initialPath = null)
     {
@@ -26,13 +27,13 @@ internal sealed class CustomEntryEditorDialog : Window
 
         Title = existing is null ? "Add custom QuickJump entry" : "Edit custom QuickJump entry";
         Width = 560;
-        Height = 315;
+        Height = 370;
         MinWidth = 500;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         var root = new Grid { Margin = new Thickness(20) };
-        for (int index = 0; index < 7; index++)
+        for (int index = 0; index < 9; index++)
         {
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         }
@@ -75,19 +76,22 @@ internal sealed class CustomEntryEditorDialog : Window
         Grid.SetRow(_enabled, 6);
         root.Children.Add(_enabled);
 
-        _error = new TextBlock { Foreground = System.Windows.Media.Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
-        Grid.SetRow(_error, 6);
-        Grid.SetColumn(_error, 1);
+        _error = new TextBlock
+        {
+            Foreground = System.Windows.Media.Brushes.Firebrick,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        Grid.SetRow(_error, 7);
         root.Children.Add(_error);
 
-        var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 30, 0, 0) };
+        var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
         var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 90, Margin = new Thickness(4), Padding = new Thickness(8, 4, 8, 4) };
-        var save = new Button { Content = "Save", IsDefault = true, MinWidth = 90, Margin = new Thickness(4), Padding = new Thickness(8, 4, 8, 4) };
-        save.Click += (_, _) => Save();
+        _save = new Button { Content = "Save", IsDefault = true, MinWidth = 90, Margin = new Thickness(4), Padding = new Thickness(8, 4, 8, 4) };
+        _save.Click += (_, _) => Save();
         footer.Children.Add(cancel);
-        footer.Children.Add(save);
-        Grid.SetRow(footer, 6);
-        Grid.SetColumn(footer, 1);
+        footer.Children.Add(_save);
+        Grid.SetRow(footer, 8);
         root.Children.Add(footer);
 
         Content = root;
@@ -97,6 +101,14 @@ internal sealed class CustomEntryEditorDialog : Window
             _alias.SelectAll();
         };
     }
+
+    internal Grid LayoutGrid => (Grid)Content;
+
+    internal TextBox AliasInput => _alias;
+
+    internal TextBlock ErrorText => _error;
+
+    internal Button SaveButton => _save;
 
     private static TextBlock Label(string text, int row)
     {

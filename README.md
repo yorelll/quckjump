@@ -20,11 +20,11 @@ It reads folders currently open in Explorer, Directory Opus, XYplorer, and OneCo
 | `cd work` | Enabled custom entries matching `work` first, then matching currently open folders and a literal path. An exact custom alias is ranked first. |
 | `cd /f report` | Enabled custom **file** entries only. |
 | `cd /fd project` | Enabled custom **folder** entries only. |
-| `cd /s project` | Current file-manager search results only; excludes custom entries. |
+| `cd /s project` | Current file-manager search results only; excludes custom entries and the literal-path fallback. |
 
 ### Result actions
 
-- **Enter** — fill and navigate to the selected path.
+- **Enter** — navigate to folders or fill and confirm files. A literal existing directory is handled as a folder, a literal existing file as a file, and a nonexistent literal path retains the legacy folder-navigation fallback.
 - **Ctrl + Enter** — copy the selected path.
 - **Right-click → Add to custom entries** — add a search result to persistent custom entries. The dialog pre-fills a safe alias; press Enter to accept it or edit it first.
 

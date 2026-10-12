@@ -31,7 +31,7 @@ public sealed class QuickJumpQueryTests
         Assert.False(parsed.IsCustomOnly);
         Assert.False(parsed.IncludesCustomEntries);
         Assert.True(parsed.IncludesNativeEntries);
-        Assert.True(parsed.IncludesLiteralPath);
+        Assert.False(parsed.IncludesLiteralPath);
     }
 
     [Fact]

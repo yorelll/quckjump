@@ -53,7 +53,12 @@ internal sealed class QuickEntrySearchService
 
         if (query.IncludesLiteralPath)
         {
-            results.Add(new QuickEntryResult(term, term, CustomEntryType.File, IsCustom: false, IsLiteral: true));
+            results.Add(new QuickEntryResult(
+                term,
+                term,
+                LiteralPathTypeResolver.Resolve(term),
+                IsCustom: false,
+                IsLiteral: true));
         }
 
         return results;

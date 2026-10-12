@@ -1,12 +1,14 @@
 using System;
+using System.IO;
 using Flow.Launcher.Plugin.QuickJump.CustomEntries;
 using Flow.Launcher.Plugin.QuickJump.FileManager;
 using Xunit;
 
 namespace Flow.Launcher.Plugin.QuickJump.Tests.CustomEntries;
 
-public sealed class QuickEntrySearchServiceTests
+public sealed class QuickEntrySearchServiceTests : IDisposable
 {
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "QuickJump.SearchTests", Guid.NewGuid().ToString("N"));
     private readonly QuickEntrySearchService _service = new();
 
     [Fact]
@@ -31,7 +33,7 @@ public sealed class QuickEntrySearchServiceTests
             first => { Assert.Equal("work", first.Title); Assert.True(first.IsCustom); },
             second => { Assert.Equal("workbench", second.Title); Assert.True(second.IsCustom); },
             third => { Assert.Equal("Work Native", third.Title); Assert.False(third.IsCustom); Assert.False(third.IsLiteral); },
-            fourth => { Assert.Equal("work", fourth.Title); Assert.True(fourth.IsLiteral); });
+            fourth => { Assert.Equal("work", fourth.Title); Assert.True(fourth.IsLiteral); Assert.Equal(CustomEntryType.Folder, fourth.Type); });
     }
 
     [Fact]
@@ -67,19 +69,51 @@ public sealed class QuickEntrySearchServiceTests
         Assert.True(result.IsCustom);
     }
 
-    [Fact]
-    public void Search_SearchOnlyExcludesCustomButRetainsNativeAndLiteral()
+    [Theory]
+    [InlineData("/s hello")]
+    [InlineData("/s /f hello")]
+    public void Search_SearchOnlyReturnsNativeResultsOnly(string query)
     {
         var results = _service.Search(
-            QuickJumpQuery.Parse("/s hello"),
+            QuickJumpQuery.Parse(query),
             [new CustomEntry { Alias = "hello", Path = @"C:\custom", Type = CustomEntryType.File, Enabled = true }],
             [new Entry("hello native", @"C:\native")],
             FuzzyContains);
 
-        Assert.Collection(
-            results,
-            first => { Assert.Equal("hello native", first.Title); Assert.False(first.IsCustom); },
-            second => { Assert.Equal("hello", second.Title); Assert.True(second.IsLiteral); });
+        var result = Assert.Single(results);
+        Assert.Equal("hello native", result.Title);
+        Assert.False(result.IsCustom);
+        Assert.False(result.IsLiteral);
+    }
+
+    [Fact]
+    public void Search_ExistingLiteralDirectoryDispatchesAsFolder()
+    {
+        string directory = CreateDirectory("folder");
+
+        var result = FindLiteral(directory);
+
+        Assert.Equal(CustomEntryType.Folder, result.Type);
+    }
+
+    [Fact]
+    public void Search_ExistingLiteralFileDispatchesAsFile()
+    {
+        string file = CreateFile("report.txt");
+
+        var result = FindLiteral(file);
+
+        Assert.Equal(CustomEntryType.File, result.Type);
+    }
+
+    [Fact]
+    public void Search_NonexistentLiteralPathDefaultsToFolderForLegacyNavigation()
+    {
+        string nonexistent = Path.Combine(_root, "does-not-exist");
+
+        var result = FindLiteral(nonexistent);
+
+        Assert.Equal(CustomEntryType.Folder, result.Type);
     }
 
     [Fact]
@@ -97,6 +131,35 @@ public sealed class QuickEntrySearchServiceTests
         var result = Assert.Single(results);
         Assert.Equal("report-folder", result.Title);
         Assert.Equal(CustomEntryType.Folder, result.Type);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_root))
+        {
+            Directory.Delete(_root, recursive: true);
+        }
+    }
+
+    private QuickEntryResult FindLiteral(string path)
+    {
+        var results = _service.Search(QuickJumpQuery.Parse(path), [], [], FuzzyContains);
+        return Assert.Single(results);
+    }
+
+    private string CreateDirectory(string name)
+    {
+        string path = Path.Combine(_root, name);
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private string CreateFile(string name)
+    {
+        Directory.CreateDirectory(_root);
+        string path = Path.Combine(_root, name);
+        File.WriteAllText(path, "quickjump");
+        return path;
     }
 
     private static bool FuzzyContains(string search, string value) =>

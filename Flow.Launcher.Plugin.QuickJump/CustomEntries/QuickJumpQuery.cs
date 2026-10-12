@@ -57,5 +57,5 @@ internal sealed record QuickJumpQuery(
     public bool IncludesNativeEntries => !IsCustomOnly;
 
     /// <summary>Whether the implicit literal path result should be added.</summary>
-    public bool IncludesLiteralPath => !IsCustomOnly && !string.IsNullOrWhiteSpace(SearchText);
+    public bool IncludesLiteralPath => !SearchOnly && !IsCustomOnly && !string.IsNullOrWhiteSpace(SearchText);
 }
