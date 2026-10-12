@@ -56,7 +56,7 @@ public sealed class CustomEntryRepositoryTests : IDisposable
     [Fact]
     public void Constructor_NormalizesNullEntriesFromLegacyStorage()
     {
-        var settings = new Settings { CustomEntries = null! };
+        var settings = new Flow.Launcher.Plugin.QuickJump.Settings.Settings { CustomEntries = null! };
         var repository = new CustomEntryRepository(settings, () => { });
 
         Assert.Empty(repository.GetAll());
