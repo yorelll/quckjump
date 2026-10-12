@@ -194,13 +194,26 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
                 return;
             }
 
-            if (type == CustomEntryType.File)
+            var route = FileDialogJumpPlan.Select(
+                DialogWindowLocator.GetFileDialogKind(dialogHandle),
+                type);
+            switch (route)
             {
-                FileJump(path, dialogHandle);
-            }
-            else
-            {
-                FolderJump(path, dialogHandle);
+                case FileDialogJumpRoute.ModernFile:
+                    ModernFileJump(path, dialogHandle);
+                    break;
+                case FileDialogJumpRoute.ModernFolder:
+                    ModernFolderJump(path, dialogHandle);
+                    break;
+                case FileDialogJumpRoute.LegacyFile:
+                    FileJumpOnLegacyDialog(path, dialogHandle);
+                    break;
+                case FileDialogJumpRoute.LegacyFolder:
+                    FolderJumpOnLegacyDialog(path, dialogHandle);
+                    break;
+                default:
+                    _context?.API.LogWarn(LogTag, "已验证的原生文件对话框结构在跳转前发生变化；已取消跳转。");
+                    break;
             }
         });
         thread.IsBackground = true;
@@ -211,15 +224,14 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
 
     private bool IsFlowForeground() => _context?.API.IsMainWindowVisible() == true;
 
-    private void FolderJump(string path, HWND dialogHandle)
+    private void ModernFolderJump(string path, HWND dialogHandle)
     {
         var inputSimulator = new WindowsInput.InputSimulator();
         FocusAddressBar(inputSimulator);
         var editHandle = WaitForModernAddressEdit(dialogHandle);
         if (editHandle == HWND.Null)
         {
-            _context?.API.LogWarn(LogTag, "未找到现代地址栏编辑框，尝试旧版文件对话框。");
-            FolderJumpOnLegacyDialog(path, dialogHandle);
+            _context?.API.LogWarn(LogTag, "现代地址栏编辑框不可用；已取消跳转，不会把旧版文件名控件当作地址栏。");
             return;
         }
 
@@ -227,21 +239,22 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
     }
 
-    private void FileJump(string path, HWND dialogHandle)
+    private void ModernFileJump(string path, HWND dialogHandle)
     {
-        // 现代 IFileDialog 在地址栏获得焦点后可接受完整路径；对于不提供该
-        // 地址栏的旧对话框，单独使用“文件名”输入框并只确认一次。
+        // Modern IFileDialog accepts the full file path through its verified
+        // address-bar path. Legacy filename controls are routed before this
+        // method and therefore never receive the modern one-Enter behavior.
         var inputSimulator = new WindowsInput.InputSimulator();
         FocusAddressBar(inputSimulator);
         var editHandle = WaitForModernAddressEdit(dialogHandle);
-        if (editHandle != HWND.Null)
+        if (editHandle == HWND.Null)
         {
-            Utils.SetWindowText(editHandle, path);
-            inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
+            _context?.API.LogWarn(LogTag, "现代地址栏编辑框不可用；已取消跳转，不会把旧版文件名控件当作地址栏。");
             return;
         }
 
-        FileJumpOnLegacyDialog(path, dialogHandle);
+        Utils.SetWindowText(editHandle, path);
+        inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
     }
 
     private void FocusAddressBar(WindowsInput.InputSimulator inputSimulator)
@@ -286,13 +299,9 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             }
         }
 
-        // Some host applications build the standard dialog hierarchy without
-        // the usual Address Band Root. Fall back only if exactly one qualified
-        // ComboBoxEx/Edit path exists, never to an arbitrary Edit control.
-        if (addressControls.Length == 0 && comboExControls.Count == 1)
-        {
-            return FindAddressEditUnder(comboExControls[0]);
-        }
+        // A ComboBoxEx/Edit path without Address Band Root is the verified
+        // legacy filename structure. It must never be accepted as a modern
+        // address bar because folder navigation then needs two Alt+O confirms.
         return HWND.Null;
     }
 

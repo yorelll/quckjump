@@ -49,6 +49,30 @@ internal sealed record FileDialogStructure(
     }
 }
 
+/// <summary>Selects the appropriate path-fill strategy after a dialog has been structurally verified.</summary>
+internal enum FileDialogJumpRoute
+{
+    None,
+    ModernFile,
+    ModernFolder,
+    LegacyFile,
+    LegacyFolder,
+}
+
+/// <summary>Pure routing rule that keeps a legacy filename control out of the modern address-bar path.</summary>
+internal static class FileDialogJumpPlan
+{
+    public static FileDialogJumpRoute Select(FileDialogKind dialogKind, CustomEntries.CustomEntryType entryType) =>
+        (dialogKind, entryType) switch
+        {
+            (FileDialogKind.Modern, CustomEntries.CustomEntryType.File) => FileDialogJumpRoute.ModernFile,
+            (FileDialogKind.Modern, CustomEntries.CustomEntryType.Folder) => FileDialogJumpRoute.ModernFolder,
+            (FileDialogKind.Legacy, CustomEntries.CustomEntryType.File) => FileDialogJumpRoute.LegacyFile,
+            (FileDialogKind.Legacy, CustomEntries.CustomEntryType.Folder) => FileDialogJumpRoute.LegacyFolder,
+            _ => FileDialogJumpRoute.None,
+        };
+}
+
 /// <summary>Chooses a candidate only when exactly one structurally verified file dialog exists.</summary>
 internal static class FileDialogCandidateSelection
 {

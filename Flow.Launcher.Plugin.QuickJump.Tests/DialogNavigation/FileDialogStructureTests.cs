@@ -1,3 +1,4 @@
+using Flow.Launcher.Plugin.QuickJump.CustomEntries;
 using Flow.Launcher.Plugin.QuickJump.DialogNavigation;
 using Xunit;
 
@@ -19,6 +20,33 @@ public sealed class FileDialogStructureTests
 
     private static FileDialogKind Classify(string windowClass, int modernPaths, int legacyPaths, bool hasStandardConfirmButton) =>
         new FileDialogStructure(windowClass, modernPaths, legacyPaths, hasStandardConfirmButton).Classify();
+
+    [Fact]
+    public void JumpPlan_LegacyFolderUsesLegacyRouteWithTwoConfirmStrategy()
+    {
+        Assert.Equal(
+            FileDialogJumpRoute.LegacyFolder,
+            FileDialogJumpPlan.Select(FileDialogKind.Legacy, CustomEntryType.Folder));
+    }
+
+    [Fact]
+    public void JumpPlan_LegacyFileUsesLegacyRouteWithSingleConfirmStrategy()
+    {
+        Assert.Equal(
+            FileDialogJumpRoute.LegacyFile,
+            FileDialogJumpPlan.Select(FileDialogKind.Legacy, CustomEntryType.File));
+    }
+
+    [Fact]
+    public void JumpPlan_LegacyStructureCannotEnterModernAddressPath()
+    {
+        Assert.NotEqual(
+            FileDialogJumpRoute.ModernFolder,
+            FileDialogJumpPlan.Select(FileDialogKind.Legacy, CustomEntryType.Folder));
+        Assert.NotEqual(
+            FileDialogJumpRoute.ModernFile,
+            FileDialogJumpPlan.Select(FileDialogKind.Legacy, CustomEntryType.File));
+    }
 
     [Fact]
     public void CandidateSelection_ExcludesGenericStandardDialogAndSelectsOnlyVerifiedFileDialog()

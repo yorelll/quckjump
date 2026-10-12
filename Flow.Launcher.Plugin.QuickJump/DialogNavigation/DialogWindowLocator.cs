@@ -25,10 +25,14 @@ internal static class DialogWindowLocator
     /// a verified legacy file-name structure before it may be activated.
     /// </summary>
     public static bool IsUsableFileDialog(HWND window) =>
+        GetFileDialogKind(window) != FileDialogKind.None;
+
+    public static FileDialogKind GetFileDialogKind(HWND window) =>
         window != HWND.Null &&
         PInvoke.IsWindow(window) &&
-        PInvoke.IsWindowVisible(window) &&
-        InspectStructure(window).Classify() != FileDialogKind.None;
+        PInvoke.IsWindowVisible(window)
+            ? InspectStructure(window).Classify()
+            : FileDialogKind.None;
 
     /// <summary>
     /// Wait until the target dialog—not Flow—is the foreground window. A merely
