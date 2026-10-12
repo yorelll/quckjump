@@ -37,6 +37,11 @@ foreach ($icon in @('icon.png', 'file.png', 'folder.png')) {
         throw "QuickJump release staging is missing $icon."
     }
 }
+foreach ($language in @('Languages\en.xaml', 'Languages\zh-cn.xaml')) {
+    if (-not (Test-Path (Join-Path $stage $language))) {
+        throw "QuickJump release staging is missing localization resource $language."
+    }
+}
 
 $assemblies = @(Get-ChildItem -Path $stage -Filter '*.dll' -File)
 if ($assemblies.Count -lt 2) {

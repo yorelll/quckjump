@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Flow.Launcher.Plugin.QuickJump.Localization;
 using Flow.Launcher.Plugin.QuickJump.Settings;
 
 namespace Flow.Launcher.Plugin.QuickJump.CustomEntries;
 
-/// <summary>验证并修改由 Flow 设置存储拥有的自定义条目。</summary>
+/// <summary>Validates and mutates custom entries owned by Flow settings storage.</summary>
 internal sealed class CustomEntryRepository
 {
     private readonly Settings.Settings _settings;
@@ -20,7 +21,7 @@ internal sealed class CustomEntryRepository
 
     public IReadOnlyList<CustomEntry> GetAll() => _settings.CustomEntries;
 
-    public bool TryAdd(string alias, string path, CustomEntryType type, bool enabled, out string? error)
+    public bool TryAdd(string alias, string path, CustomEntryType type, bool enabled, out QuickJumpError? error)
     {
         var entry = new CustomEntry
         {
@@ -40,13 +41,13 @@ internal sealed class CustomEntryRepository
         return true;
     }
 
-    public bool TryUpdate(string originalAlias, string alias, string path, CustomEntryType type, bool enabled, out string? error)
+    public bool TryUpdate(string originalAlias, string alias, string path, CustomEntryType type, bool enabled, out QuickJumpError? error)
     {
         var existing = _settings.CustomEntries.FirstOrDefault(entry =>
             string.Equals(entry.Alias, originalAlias, StringComparison.OrdinalIgnoreCase));
         if (existing is null)
         {
-            error = $"自定义跳转“{originalAlias}”已不存在。";
+            error = new QuickJumpError(QuickJumpErrorCode.EntryMissing, originalAlias);
             return false;
         }
 
@@ -85,13 +86,13 @@ internal sealed class CustomEntryRepository
         return true;
     }
 
-    public bool TrySetEnabled(string alias, bool enabled, out string? error)
+    public bool TrySetEnabled(string alias, bool enabled, out QuickJumpError? error)
     {
         var entry = _settings.CustomEntries.FirstOrDefault(item =>
             string.Equals(item.Alias, alias, StringComparison.OrdinalIgnoreCase));
         if (entry is null)
         {
-            error = $"自定义跳转“{alias}”已不存在。";
+            error = new QuickJumpError(QuickJumpErrorCode.EntryMissing, alias);
             return false;
         }
 

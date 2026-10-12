@@ -1,0 +1,69 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:system="clr-namespace:System;assembly=mscorlib">
+  <system:String x:Key="quickjump_plugin_name">QuickJump</system:String>
+  <system:String x:Key="quickjump_plugin_description">Quickly jump to files and folders in open or save dialogs.</system:String>
+
+  <system:String x:Key="quickjump_result_custom_file">Custom file</system:String>
+  <system:String x:Key="quickjump_result_custom_folder">Custom folder</system:String>
+  <system:String x:Key="quickjump_result_literal_path">Entered path</system:String>
+  <system:String x:Key="quickjump_result_open_folder">Open folder</system:String>
+  <system:String x:Key="quickjump_context_jump">Jump</system:String>
+  <system:String x:Key="quickjump_context_show_path">Show path</system:String>
+  <system:String x:Key="quickjump_context_copy_path">Copy path</system:String>
+  <system:String x:Key="quickjump_context_add_custom">Add to custom entries</system:String>
+  <system:String x:Key="quickjump_context_add_custom_subtitle">Create a persistent file or folder shortcut</system:String>
+  <system:String x:Key="quickjump_add_existing_only">Only an existing file or folder can be added to custom entries.</system:String>
+  <system:String x:Key="quickjump_add_success">Added to custom entries.</system:String>
+
+  <system:String x:Key="quickjump_settings_title">QuickJump settings</system:String>
+  <system:String x:Key="quickjump_settings_custom_entries">Custom entries</system:String>
+  <system:String x:Key="quickjump_settings_address_shortcut">Address-bar focus shortcut</system:String>
+  <system:String x:Key="quickjump_settings_alt_d">Alt+D (default)</system:String>
+  <system:String x:Key="quickjump_settings_ctrl_l">Ctrl+L (fallback)</system:String>
+  <system:String x:Key="quickjump_settings_address_help">QuickJump sends the selected shortcut to the Windows native file dialog to focus its address bar, then inserts the path. Alt+D is the default; use Ctrl+L if an app or dialog ignores Alt+D.</system:String>
+  <system:String x:Key="quickjump_column_alias">Alias</system:String>
+  <system:String x:Key="quickjump_column_path">Path</system:String>
+  <system:String x:Key="quickjump_column_type">Type</system:String>
+  <system:String x:Key="quickjump_column_enabled">Enabled</system:String>
+  <system:String x:Key="quickjump_button_add">Add</system:String>
+  <system:String x:Key="quickjump_button_edit">Edit</system:String>
+  <system:String x:Key="quickjump_button_delete">Delete</system:String>
+  <system:String x:Key="quickjump_select_edit">Select a custom entry to edit.</system:String>
+  <system:String x:Key="quickjump_select_delete">Select a custom entry to delete.</system:String>
+  <system:String x:Key="quickjump_entry_missing">The selected custom entry no longer exists.</system:String>
+  <system:String x:Key="quickjump_update_enabled_failed">Unable to update entry state.</system:String>
+  <system:String x:Key="quickjump_delete_confirm">Delete custom entry “{0}”? The original file or folder will not be deleted.</system:String>
+
+  <system:String x:Key="quickjump_editor_add_title">Add custom entry</system:String>
+  <system:String x:Key="quickjump_editor_edit_title">Edit custom entry</system:String>
+  <system:String x:Key="quickjump_editor_alias">Alias</system:String>
+  <system:String x:Key="quickjump_editor_path">Path</system:String>
+  <system:String x:Key="quickjump_editor_detected_type">Detected type</system:String>
+  <system:String x:Key="quickjump_editor_enabled">Enabled</system:String>
+  <system:String x:Key="quickjump_editor_choose_file">Choose file…</system:String>
+  <system:String x:Key="quickjump_editor_choose_folder">Choose folder…</system:String>
+  <system:String x:Key="quickjump_editor_save">Save</system:String>
+  <system:String x:Key="quickjump_editor_cancel">Cancel</system:String>
+  <system:String x:Key="quickjump_editor_alias_tooltip">Letters, numbers, hyphens, and underscores only. Press Enter to save.</system:String>
+  <system:String x:Key="quickjump_editor_choose_file_title">Choose a file to jump to</system:String>
+  <system:String x:Key="quickjump_editor_choose_folder_title">Choose a folder to jump to</system:String>
+  <system:String x:Key="quickjump_editor_all_files">All files|*.*</system:String>
+  <system:String x:Key="quickjump_detected_file">File</system:String>
+  <system:String x:Key="quickjump_detected_folder">Folder</system:String>
+  <system:String x:Key="quickjump_detected_invalid">No valid file or folder found</system:String>
+  <system:String x:Key="quickjump_save_failed">Unable to save custom entry.</system:String>
+
+  <system:String x:Key="quickjump_error_alias_required">Alias is required.</system:String>
+  <system:String x:Key="quickjump_error_alias_length">Alias must be {0} characters or fewer.</system:String>
+  <system:String x:Key="quickjump_error_alias_invalid">Alias may contain only letters, numbers, hyphens, and underscores; spaces and special characters are not allowed.</system:String>
+  <system:String x:Key="quickjump_error_path_required">Path is required.</system:String>
+  <system:String x:Key="quickjump_error_path_invalid">Path is not a valid Windows path.</system:String>
+  <system:String x:Key="quickjump_error_path_missing">Path does not exist or cannot be accessed. Choose an existing file or folder.</system:String>
+  <system:String x:Key="quickjump_error_path_type_changed">The path type changed. Save again to detect its type automatically.</system:String>
+  <system:String x:Key="quickjump_error_alias_exists">An entry with alias “{0}” already exists.</system:String>
+  <system:String x:Key="quickjump_error_entry_missing">Custom entry “{0}” no longer exists.</system:String>
+  <system:String x:Key="quickjump_error_detect_path">Unable to detect the path type.</system:String>
+  <system:String x:Key="quickjump_alias_fallback">entry</system:String>
+</ResourceDictionary>

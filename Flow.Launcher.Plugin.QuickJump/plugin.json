@@ -2,7 +2,7 @@
     "ID": "B3A7F2C4D91E4B6D8A0C5F7E9B2D1A3C",
     "ActionKeyword": "cd",
     "Name": "QuickJump",
-    "Description": "快速跳转到打开或保存对话框中的文件和文件夹。",
+    "Description": "Quickly jump to files and folders in open or save dialogs.",
     "Author": "yorelll",
     "Version": "1.0.1",
     "Language": "csharp",

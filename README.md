@@ -1,6 +1,6 @@
 # QuickJump for Flow Launcher
 
-[QuickJump](https://github.com/yorelll/quckjump) 是一个 Flow Launcher 插件，可在 Windows 的**打开**、**保存**或**选择文件夹**对话框中快速跳转到文件或文件夹。
+[QuickJump](https://github.com/yorelll/quckjump) 是一个 Flow Launcher 插件，可在 Windows 的**打开**、**保存**或**选择文件夹**对话框中快速跳转到文件或文件夹。插件界面会跟随 Flow Launcher 当前语言，在英文和简体中文之间切换。
 
 它会读取 Explorer、Directory Opus、XYplorer 和 OneCommander 当前打开的文件夹，也支持维护持久化的文件/文件夹别名。
 

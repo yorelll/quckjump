@@ -20,17 +20,17 @@ public sealed class CustomEntryRepositoryTests : IDisposable
         var file = CreateFile("report.txt");
         var folder = CreateDirectory("folder");
 
-        Assert.True(repository.TryAdd("report", file, CustomEntryType.File, true, out var addError), addError);
+        Assert.True(repository.TryAdd("report", file, CustomEntryType.File, true, out var addError), addError is null ? null : addError.Code.ToString());
         Assert.Single(repository.GetAll());
         Assert.Equal(1, saves);
 
-        Assert.True(repository.TryUpdate("report", "documents", folder, CustomEntryType.Folder, false, out var updateError), updateError);
+        Assert.True(repository.TryUpdate("report", "documents", folder, CustomEntryType.Folder, false, out var updateError), updateError is null ? null : updateError.Code.ToString());
         Assert.Equal("documents", repository.GetAll().Single().Alias);
         Assert.Equal(CustomEntryType.Folder, repository.GetAll().Single().Type);
         Assert.False(repository.GetAll().Single().Enabled);
         Assert.Equal(2, saves);
 
-        Assert.True(repository.TrySetEnabled("documents", true, out var toggleError), toggleError);
+        Assert.True(repository.TrySetEnabled("documents", true, out var toggleError), toggleError is null ? null : toggleError.Code.ToString());
         Assert.True(repository.GetAll().Single().Enabled);
         Assert.Equal(3, saves);
 

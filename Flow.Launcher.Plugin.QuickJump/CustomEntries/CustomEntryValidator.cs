@@ -3,43 +3,41 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Flow.Launcher.Plugin.QuickJump.Localization;
 
 namespace Flow.Launcher.Plugin.QuickJump.CustomEntries;
 
-/// <summary>验证别名并确保自定义条目路径与自动识别出的类型一致。</summary>
+/// <summary>Validates aliases and ensures custom-entry paths agree with their detected type.</summary>
 internal static partial class CustomEntryValidator
 {
     private const int AliasMaximumLength = 120;
 
-    /// <summary>
-    /// 接受 Unicode 字母/数字、连字符和下划线，因而支持中文、英文及其他文字，
-    /// 同时拒绝空格和其他标点符号。
-    /// </summary>
+    /// <summary>Accepts Unicode letters/numbers plus hyphen and underscore.</summary>
     [GeneratedRegex("^[\\p{L}\\p{N}_-]+$", RegexOptions.CultureInvariant)]
     private static partial Regex AliasPattern();
 
-    public static string? ValidateAlias(string? alias)
+    public static QuickJumpError? ValidateAlias(string? alias)
     {
         if (string.IsNullOrWhiteSpace(alias))
         {
-            return "别名不能为空。";
+            return new QuickJumpError(QuickJumpErrorCode.AliasRequired);
         }
 
         if (alias.Length > AliasMaximumLength)
         {
-            return $"别名长度不能超过 {AliasMaximumLength} 个字符。";
+            return new QuickJumpError(QuickJumpErrorCode.AliasLength, AliasMaximumLength);
         }
 
         return AliasPattern().IsMatch(alias)
             ? null
-            : "别名只能包含字母、数字、连字符和下划线，不能包含空格或特殊字符。";
+            : new QuickJumpError(QuickJumpErrorCode.AliasInvalid);
     }
 
-    public static string? ValidatePath(string? path, CustomEntryType type)
+    public static QuickJumpError? ValidatePath(string? path, CustomEntryType type)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return "路径不能为空。";
+            return new QuickJumpError(QuickJumpErrorCode.PathRequired);
         }
 
         try
@@ -48,7 +46,7 @@ internal static partial class CustomEntryValidator
         }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            return "路径不是有效的 Windows 路径。";
+            return new QuickJumpError(QuickJumpErrorCode.PathInvalid);
         }
 
         if (!PathTypeDetector.TryDetect(path, out var detectedType, out var error))
@@ -56,10 +54,10 @@ internal static partial class CustomEntryValidator
             return error;
         }
 
-        return detectedType == type ? null : "路径类型已变化，请重新保存以自动识别类型。";
+        return detectedType == type ? null : new QuickJumpError(QuickJumpErrorCode.PathTypeChanged);
     }
 
-    public static string? Validate(CustomEntry entry, IEnumerable<CustomEntry> existingEntries, string? originalAlias = null)
+    public static QuickJumpError? Validate(CustomEntry entry, IEnumerable<CustomEntry> existingEntries, string? originalAlias = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(existingEntries);
@@ -79,6 +77,6 @@ internal static partial class CustomEntryValidator
         var duplicate = existingEntries.Any(existing =>
             !string.Equals(existing.Alias, originalAlias, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(existing.Alias, entry.Alias, StringComparison.OrdinalIgnoreCase));
-        return duplicate ? $"别名“{entry.Alias}”已存在。" : null;
+        return duplicate ? new QuickJumpError(QuickJumpErrorCode.AliasExists, entry.Alias) : null;
     }
 }

@@ -1,6 +1,7 @@
 #pragma warning disable 1591
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -13,14 +14,16 @@ using Windows.Win32.UI.WindowsAndMessaging;
 using Flow.Launcher.Plugin.QuickJump.CustomEntries;
 using Flow.Launcher.Plugin.QuickJump.DialogNavigation;
 using Flow.Launcher.Plugin.QuickJump.FileManager;
+using Flow.Launcher.Plugin.QuickJump.Localization;
 using Flow.Launcher.Plugin.QuickJump.Settings;
 
 namespace Flow.Launcher.Plugin.QuickJump;
 
 /// <summary>将已打开的文件夹或自定义条目填入活动 Windows 文件对话框。</summary>
-public class QuickJump : IPlugin, IContextMenu, ISettingProvider
+public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
 {
     private const string LogTag = "QuickJump";
+    internal static PluginInitContext Context { get; private set; } = null!;
     private PluginInitContext? _context;
     private Settings.Settings? _settings;
     private CustomEntryRepository? _customEntries;
@@ -29,9 +32,20 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
 
     public void Init(PluginInitContext context)
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
-        _settings = context.API.LoadSettingJsonStorage<Settings.Settings>();
-        _customEntries = new CustomEntryRepository(_settings, () => context.API.SaveSettingJsonStorage<Settings.Settings>());
+        Context = context ?? throw new ArgumentNullException(nameof(context));
+        _context = Context;
+        _settings = Context.API.LoadSettingJsonStorage<Settings.Settings>();
+        _customEntries = new CustomEntryRepository(_settings, () => Context.API.SaveSettingJsonStorage<Settings.Settings>());
+    }
+
+    public string GetTranslatedPluginTitle() => QuickJumpText.PluginName();
+
+    public string GetTranslatedPluginDescription() => QuickJumpText.PluginDescription();
+
+    public void OnCultureInfoChanged(CultureInfo newCulture)
+    {
+        // Results and context menus resolve Localize values each time they are
+        // constructed. Persistent WPF controls use DynamicResource references.
     }
 
     public List<Result> Query(Query query)
@@ -66,20 +80,20 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
         var entry = context.Entry;
         var jumpAction = new Result
         {
-            Title = "跳转",
+            Title = QuickJumpText.ContextJump(),
             SubTitle = entry.Path,
             IcoPath = IconFor(entry),
             Action = _ => JumpAction(entry.Path, entry.Type, context.CapturedDialog),
         };
         var showAction = new Result
         {
-            Title = "显示路径",
+            Title = QuickJumpText.ContextShowPath(),
             IcoPath = "icon.png",
             Action = _ => ShowAction(entry.Path),
         };
         var copyAction = new Result
         {
-            Title = "复制路径",
+            Title = QuickJumpText.ContextCopyPath(),
             IcoPath = "icon.png",
             Action = _ => CopyAction(entry.Path),
         };
@@ -89,8 +103,8 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
         {
             actions.Add(new Result
             {
-                Title = "添加到自定义跳转",
-                SubTitle = "创建一个持久化的文件或文件夹快捷方式",
+                Title = QuickJumpText.ContextAddCustom(),
+                SubTitle = QuickJumpText.ContextAddCustomSubtitle(),
                 IcoPath = "icon.png",
                 Action = _ => AddToCustomEntries(entry.Path),
             });
@@ -112,13 +126,13 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
     private Result ToFlowResult(QuickEntryResult entry, int score, HWND capturedDialog)
     {
         string typeLabel = entry.IsCustom
-            ? entry.Type == CustomEntryType.File ? "自定义文件" : "自定义文件夹"
-            : entry.IsLiteral ? "输入路径" : "已打开的文件夹";
+            ? entry.Type == CustomEntryType.File ? QuickJumpText.CustomFile() : QuickJumpText.CustomFolder()
+            : entry.IsLiteral ? QuickJumpText.LiteralPath() : QuickJumpText.OpenFolder();
         var resultContext = new QuickJumpResultContext(entry, capturedDialog);
         return new Result
         {
             Title = entry.Title,
-            SubTitle = $"{typeLabel}：{entry.Path}",
+            SubTitle = $"{typeLabel}: {entry.Path}",
             IcoPath = IconFor(entry),
             Action = ctx => ctx.SpecialKeyState.CtrlPressed
                 ? CopyAction(entry.Path)
@@ -153,7 +167,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
 
         if (!PathTypeDetector.TryDetect(path, out _, out var error))
         {
-            _context?.API.ShowMsg(error ?? "只有现有文件或文件夹可以添加到自定义跳转。");
+            _context?.API.ShowMsg(error is null ? QuickJumpText.AddExistingOnly() : QuickJumpText.Error(error));
             return false;
         }
 
@@ -161,7 +175,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
         // window. The presenter creates and shows the dialog via WPF's UI
         // dispatcher and avoids assigning such an invalid owner.
         _customEntryDialogPresenter.ShowForPath(_customEntries, path, () =>
-            _context?.API.ShowMsg("已添加到自定义跳转。"));
+            _context?.API.ShowMsg(QuickJumpText.AddSuccess()));
         return false;
     }
 

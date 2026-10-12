@@ -4,10 +4,11 @@ using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
 using Flow.Launcher.Plugin.QuickJump.CustomEntries;
+using Flow.Launcher.Plugin.QuickJump.Localization;
 
 namespace Flow.Launcher.Plugin.QuickJump.Settings;
 
-/// <summary>用于新增或编辑自定义快速跳转条目的对话框。</summary>
+/// <summary>Editable custom entry window whose persistent controls resolve Flow language resources dynamically.</summary>
 internal sealed class CustomEntryEditorDialog : Window
 {
     private readonly CustomEntryRepository _repository;
@@ -27,7 +28,7 @@ internal sealed class CustomEntryEditorDialog : Window
         var initialType = existing?.Type ?? DetectExistingType(currentPath);
         string defaultAlias = existing?.Alias ?? CreateInitialAlias(currentPath, initialType);
 
-        Title = existing is null ? "新增自定义跳转" : "编辑自定义跳转";
+        SetResourceReference(TitleProperty, existing is null ? "quickjump_editor_add_title" : "quickjump_editor_edit_title");
         Width = 600;
         Height = 390;
         MinWidth = 520;
@@ -35,31 +36,22 @@ internal sealed class CustomEntryEditorDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         var root = new Grid { Margin = new Thickness(20) };
-        for (int index = 0; index < 9; index++)
-        {
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        }
+        for (int index = 0; index < 9; index++) root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        root.Children.Add(Label("别名", 0));
+        root.Children.Add(Label("quickjump_editor_alias", 0));
         _alias = Input(defaultAlias, 1);
-        _alias.ToolTip = "只能包含字母、数字、连字符和下划线；按 Enter 保存。";
-        _alias.KeyDown += (_, args) =>
-        {
-            if (args.Key == System.Windows.Input.Key.Enter)
-            {
-                Save();
-            }
-        };
+        _alias.SetResourceReference(ToolTipProperty, "quickjump_editor_alias_tooltip");
+        _alias.KeyDown += (_, args) => { if (args.Key == System.Windows.Input.Key.Enter) Save(); };
         root.Children.Add(_alias);
 
-        root.Children.Add(Label("路径", 2));
+        root.Children.Add(Label("quickjump_editor_path", 2));
         var pathPanel = new DockPanel { LastChildFill = true };
         Grid.SetRow(pathPanel, 3);
-        var chooseFolder = new Button { Content = "选择文件夹…", Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(8, 4, 8, 4) };
+        var chooseFolder = LocalizedButton("quickjump_editor_choose_folder");
         chooseFolder.Click += (_, _) => ChooseFolder();
         DockPanel.SetDock(chooseFolder, Dock.Right);
         pathPanel.Children.Add(chooseFolder);
-        var chooseFile = new Button { Content = "选择文件…", Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(8, 4, 8, 4) };
+        var chooseFile = LocalizedButton("quickjump_editor_choose_file");
         chooseFile.Click += (_, _) => ChooseFile();
         DockPanel.SetDock(chooseFile, Dock.Right);
         pathPanel.Children.Add(chooseFile);
@@ -68,57 +60,46 @@ internal sealed class CustomEntryEditorDialog : Window
         pathPanel.Children.Add(_path);
         root.Children.Add(pathPanel);
 
-        root.Children.Add(Label("自动识别类型", 4));
+        root.Children.Add(Label("quickjump_editor_detected_type", 4));
         _detectedType = new TextBlock { Margin = new Thickness(0, 5, 0, 8), VerticalAlignment = VerticalAlignment.Center };
         Grid.SetRow(_detectedType, 5);
         root.Children.Add(_detectedType);
 
-        _enabled = new CheckBox { Content = "启用", IsChecked = existing?.Enabled ?? true, Margin = new Thickness(0, 3, 0, 0) };
+        _enabled = new CheckBox { IsChecked = existing?.Enabled ?? true, Margin = new Thickness(0, 3, 0, 0) };
+        _enabled.SetResourceReference(ContentControl.ContentProperty, "quickjump_editor_enabled");
         Grid.SetRow(_enabled, 6);
         root.Children.Add(_enabled);
 
-        _error = new TextBlock
-        {
-            Foreground = System.Windows.Media.Brushes.Firebrick,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 8, 0, 0),
-        };
+        _error = new TextBlock { Foreground = System.Windows.Media.Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
         Grid.SetRow(_error, 7);
         root.Children.Add(_error);
 
         var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
-        var cancel = new Button { Content = "取消", IsCancel = true, MinWidth = 90, Margin = new Thickness(4), Padding = new Thickness(8, 4, 8, 4) };
-        _save = new Button { Content = "保存", IsDefault = true, MinWidth = 90, Margin = new Thickness(4), Padding = new Thickness(8, 4, 8, 4) };
+        var cancel = LocalizedButton("quickjump_editor_cancel");
+        cancel.IsCancel = true;
+        _save = LocalizedButton("quickjump_editor_save");
+        _save.IsDefault = true;
         _save.Click += (_, _) => Save();
         footer.Children.Add(cancel);
         footer.Children.Add(_save);
         Grid.SetRow(footer, 8);
         root.Children.Add(footer);
-
         Content = root;
         UpdateDetectedType();
-        Loaded += (_, _) =>
-        {
-            _alias.Focus();
-            _alias.SelectAll();
-        };
+        Loaded += (_, _) => { _alias.Focus(); _alias.SelectAll(); };
     }
 
     internal Grid LayoutGrid => (Grid)Content;
-
     internal TextBox AliasInput => _alias;
-
     internal TextBox PathInput => _path;
-
     internal TextBlock DetectedTypeText => _detectedType;
-
     internal TextBlock ErrorText => _error;
-
     internal Button SaveButton => _save;
 
-    private static TextBlock Label(string text, int row)
+    private static TextBlock Label(string resourceKey, int row)
     {
-        var label = new TextBlock { Text = text, Margin = new Thickness(0, 8, 0, 3) };
+        var label = new TextBlock { Margin = new Thickness(0, 8, 0, 3) };
+        label.SetResourceReference(TextBlock.TextProperty, resourceKey);
         Grid.SetRow(label, row);
         return label;
     }
@@ -130,62 +111,50 @@ internal sealed class CustomEntryEditorDialog : Window
         return input;
     }
 
+    private static Button LocalizedButton(string resourceKey)
+    {
+        var button = new Button { MinWidth = 90, Margin = new Thickness(4), Padding = new Thickness(8, 4, 8, 4) };
+        button.SetResourceReference(ContentControl.ContentProperty, resourceKey);
+        return button;
+    }
+
     private void ChooseFile()
     {
-        var dialog = new OpenFileDialog { CheckFileExists = true, Filter = "所有文件|*.*", Title = "选择要快速跳转的文件" };
-        if (dialog.ShowDialog(this) == true)
-        {
-            _path.Text = dialog.FileName;
-        }
+        var dialog = new OpenFileDialog { CheckFileExists = true, Filter = QuickJumpText.AllFilesFilter(), Title = QuickJumpText.ChooseFileTitle() };
+        if (dialog.ShowDialog(this) == true) _path.Text = dialog.FileName;
     }
 
     private void ChooseFolder()
     {
-        using var dialog = new System.Windows.Forms.FolderBrowserDialog
-        {
-            Description = "选择要快速跳转的文件夹",
-            UseDescriptionForTitle = true,
-        };
-        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-        {
-            _path.Text = dialog.SelectedPath;
-        }
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog { Description = QuickJumpText.ChooseFolderTitle(), UseDescriptionForTitle = true };
+        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) _path.Text = dialog.SelectedPath;
     }
 
     private void UpdateDetectedType()
     {
         _detectedType.Text = PathTypeDetector.TryDetect(_path.Text, out var type, out _)
-            ? type == CustomEntryType.File ? "文件" : "文件夹"
-            : "未找到有效的文件或文件夹";
+            ? QuickJumpText.Type(type)
+            : QuickJumpText.DetectedInvalid();
     }
 
     private void Save()
     {
         if (!PathTypeDetector.TryDetect(_path.Text, out var type, out var typeError))
         {
-            _error.Text = typeError ?? "无法识别路径类型。";
+            _error.Text = QuickJumpText.Error(typeError);
             return;
         }
-
         bool success = _originalAlias is null
             ? _repository.TryAdd(_alias.Text, _path.Text, type, _enabled.IsChecked == true, out var error)
             : _repository.TryUpdate(_originalAlias, _alias.Text, _path.Text, type, _enabled.IsChecked == true, out error);
         if (!success)
         {
-            _error.Text = error ?? "无法保存自定义跳转。";
+            _error.Text = QuickJumpText.Error(error);
             return;
         }
-
-        DialogResult = true;
+        if (IsVisible) DialogResult = true;
     }
 
-    private string CreateInitialAlias(string path, CustomEntryType type)
-    {
-        return string.IsNullOrWhiteSpace(path)
-            ? "条目"
-            : AliasGenerator.CreateDefault(path, type, _repository.GetAll());
-    }
-
-    private static CustomEntryType DetectExistingType(string path) =>
-        Directory.Exists(path) ? CustomEntryType.Folder : CustomEntryType.File;
+    private string CreateInitialAlias(string path, CustomEntryType type) => string.IsNullOrWhiteSpace(path) ? QuickJumpText.AliasFallback() : AliasGenerator.CreateDefault(path, type, _repository.GetAll());
+    private static CustomEntryType DetectExistingType(string path) => Directory.Exists(path) ? CustomEntryType.Folder : CustomEntryType.File;
 }
