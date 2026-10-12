@@ -79,7 +79,7 @@ internal sealed class QuickJumpSettingsPanel : UserControl
 
     internal IReadOnlyList<CustomEntryRow> EntryRows => _rows;
 
-    private Control CreateStrategyPanel()
+    private UIElement CreateStrategyPanel()
     {
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 2) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

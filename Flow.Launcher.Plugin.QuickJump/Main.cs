@@ -143,16 +143,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider
             return false;
         }
 
-        CustomEntryType type;
-        if (File.Exists(path))
-        {
-            type = CustomEntryType.File;
-        }
-        else if (Directory.Exists(path))
-        {
-            type = CustomEntryType.Folder;
-        }
-        else
+        if (!File.Exists(path) && !Directory.Exists(path))
         {
             _context?.API.ShowMsg("Only an existing file or folder can be added to custom entries.");
             return false;
