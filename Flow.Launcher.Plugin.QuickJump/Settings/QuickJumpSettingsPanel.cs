@@ -11,7 +11,7 @@ using Flow.Launcher.Plugin.QuickJump.Localization;
 namespace Flow.Launcher.Plugin.QuickJump.Settings;
 
 /// <summary>Flow settings UI using DynamicResource keys so labels follow Flow's current language.</summary>
-internal sealed class QuickJumpSettingsPanel : UserControl
+internal sealed class QuickJumpSettingsPanel : UserControl, ILocalizedControl
 {
     private readonly Settings _settings;
     private readonly CustomEntryRepository _repository;
@@ -39,11 +39,14 @@ internal sealed class QuickJumpSettingsPanel : UserControl
         toolbar.Children.Add(CreateButton("quickjump_button_add", (_, _) => AddEntry()));
         DockPanel.SetDock(toolbar, Dock.Bottom); root.Children.Add(toolbar);
         _grid = CreateGrid(); root.Children.Add(_grid); Content = root; ReloadEntries();
+        LocalizedControlRegistry.Register(this);
     }
 
     internal DataGrid EntriesGrid => _grid;
     internal IReadOnlyList<CustomEntryRow> EntryRows => _rows;
     internal DockPanel RootPanel => (DockPanel)Content;
+
+    public void RefreshLocalizedValues() => ReloadEntries();
 
     private UIElement CreateStrategyPanel()
     {

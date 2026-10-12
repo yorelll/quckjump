@@ -9,7 +9,7 @@ using Flow.Launcher.Plugin.QuickJump.Localization;
 namespace Flow.Launcher.Plugin.QuickJump.Settings;
 
 /// <summary>Editable custom entry window whose persistent controls resolve Flow language resources dynamically.</summary>
-internal sealed class CustomEntryEditorDialog : Window
+internal sealed class CustomEntryEditorDialog : Window, ILocalizedControl
 {
     private readonly CustomEntryRepository _repository;
     private readonly string? _originalAlias;
@@ -86,6 +86,7 @@ internal sealed class CustomEntryEditorDialog : Window
         root.Children.Add(footer);
         Content = root;
         UpdateDetectedType();
+        LocalizedControlRegistry.Register(this);
         Loaded += (_, _) => { _alias.Focus(); _alias.SelectAll(); };
     }
 
@@ -95,6 +96,8 @@ internal sealed class CustomEntryEditorDialog : Window
     internal TextBlock DetectedTypeText => _detectedType;
     internal TextBlock ErrorText => _error;
     internal Button SaveButton => _save;
+
+    public void RefreshLocalizedValues() => UpdateDetectedType();
 
     private static TextBlock Label(string resourceKey, int row)
     {

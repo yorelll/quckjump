@@ -44,8 +44,9 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
 
     public void OnCultureInfoChanged(CultureInfo newCulture)
     {
-        // Results and context menus resolve Localize values each time they are
-        // constructed. Persistent WPF controls use DynamicResource references.
+        // Results/context menus resolve Localize values on construction. The
+        // registry refreshes materialized type labels on existing WPF controls.
+        LocalizedControlRegistry.RefreshAll();
     }
 
     public List<Result> Query(Query query)
@@ -184,10 +185,12 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         _context?.API.LogInfo(LogTag, $"准备跳转到 {path}");
         var thread = new Thread(() =>
         {
-            var dialogHandle = DialogWindowLocator.WaitForTarget(capturedDialog);
+            var dialogHandle = DialogWindowLocator.WaitForReadyTarget(
+                capturedDialog,
+                isFlowForeground: IsFlowForeground);
             if (dialogHandle == HWND.Null)
             {
-                _context?.API.LogWarn(LogTag, "未找到可用的 Windows 文件对话框；已完成有界重试。");
+                _context?.API.LogWarn(LogTag, "原生文件对话框未在有界重试内成为前台窗口；为避免向 Flow 注入快捷键，已取消跳转。");
                 return;
             }
 
@@ -205,6 +208,8 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         thread.Start();
         return true;
     }
+
+    private bool IsFlowForeground() => _context?.API.IsMainWindowVisible() == true;
 
     private void FolderJump(string path, HWND dialogHandle)
     {

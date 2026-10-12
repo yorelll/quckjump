@@ -1,4 +1,5 @@
 GetForegroundWindow
+SetForegroundWindow
 GetClassName
 SendMessage
 WM_SETTEXT

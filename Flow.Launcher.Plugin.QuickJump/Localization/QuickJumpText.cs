@@ -50,7 +50,9 @@ internal static class QuickJumpText
         _ => SaveFailed(),
     };
 
-    public static string Type(CustomEntryType type) => type == CustomEntryType.File
+    internal static Func<CustomEntryType, string>? TypeResolverForTests { get; set; }
+
+    public static string Type(CustomEntryType type) => TypeResolverForTests?.Invoke(type) ?? (type == CustomEntryType.File
         ? IsInitialized ? Localize.quickjump_detected_file() : "File"
-        : IsInitialized ? Localize.quickjump_detected_folder() : "Folder";
+        : IsInitialized ? Localize.quickjump_detected_folder() : "Folder");
 }
