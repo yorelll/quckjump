@@ -34,7 +34,10 @@ public sealed class QuickJumpSettingsPanelTests : IDisposable
         {
             var panel = CreatePanel(); var grid = panel.EntriesGrid;
             var headers = grid.Columns.Select(column => Assert.IsType<TextBlock>(column.Header)).ToArray();
-            var help = panel.RootPanel.Children.OfType<StackPanel>().Single().Children.OfType<TextBlock>().Single();
+            var help = panel.RootPanel.Children
+                .OfType<StackPanel>()
+                .SelectMany(stack => stack.Children.OfType<TextBlock>())
+                .Single(text => DependencyPropertyHelper.GetValueSource(text, TextBlock.TextProperty).IsExpression);
             return (grid.SelectionUnit, grid.SelectionMode, grid.IsReadOnly, headers.Select(header => DependencyPropertyHelper.GetValueSource(header, TextBlock.TextProperty).IsExpression).ToArray(), panel.EntryRows.Single().Enabled, panel.EntryRows.Single().Type, DependencyPropertyHelper.GetValueSource(help, TextBlock.TextProperty).IsExpression);
         });
         Assert.Equal(DataGridSelectionUnit.FullRow, details.Item1); Assert.Equal(DataGridSelectionMode.Single, details.Item2); Assert.True(details.Item3);
