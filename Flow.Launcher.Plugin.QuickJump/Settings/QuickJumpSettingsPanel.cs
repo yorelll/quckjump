@@ -36,7 +36,9 @@ internal sealed class QuickJumpSettingsPanel : UserControl
         DockPanel.SetDock(title, Dock.Top);
         root.Children.Add(title);
 
-        root.Children.Add(CreateStrategyPanel());
+        var strategyPanel = CreateStrategyPanel();
+        DockPanel.SetDock(strategyPanel, Dock.Top);
+        root.Children.Add(strategyPanel);
 
         _error = new TextBlock
         {
@@ -78,6 +80,8 @@ internal sealed class QuickJumpSettingsPanel : UserControl
     internal DataGrid EntriesGrid => _grid;
 
     internal IReadOnlyList<CustomEntryRow> EntryRows => _rows;
+
+    internal DockPanel RootPanel => (DockPanel)Content;
 
     private UIElement CreateStrategyPanel()
     {

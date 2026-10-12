@@ -14,14 +14,26 @@ public sealed class QuickJumpSettingsPanelTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), "QuickJump.SettingsPanelTests", Guid.NewGuid().ToString("N"));
 
     [Fact]
+    public void Panel_StrategyPanelDocksTopAndEntriesGridIsFinalFillChild()
+    {
+        var layout = RunOnSta(() =>
+        {
+            var panel = CreatePanel();
+            var root = panel.RootPanel;
+            var strategy = root.Children.OfType<Grid>().Single(grid => grid.Children.OfType<TextBlock>().Any(text => text.Text == "How to navigate to the path"));
+            return (DockPanel.GetDock(strategy), root.Children[^1], panel.EntriesGrid);
+        });
+
+        Assert.Equal(Dock.Top, layout.Item1);
+        Assert.Same(layout.Item3, layout.Item2);
+    }
+
+    [Fact]
     public void Panel_ExposesCustomEntryManagementColumns()
     {
         var details = RunOnSta(() =>
         {
-            var settings = new Flow.Launcher.Plugin.QuickJump.Settings.Settings();
-            var path = CreateFile();
-            settings.CustomEntries.Add(new CustomEntry { Alias = "report", Path = path, Type = CustomEntryType.File, Enabled = true });
-            var panel = new QuickJumpSettingsPanel(settings, new CustomEntryRepository(settings, () => { }), () => { });
+            var panel = CreatePanel();
             var grid = panel.EntriesGrid;
             return (grid.SelectionUnit, grid.SelectionMode, grid.IsReadOnly, grid.Columns.Select(column => column.Header.ToString()).ToArray(), panel.EntryRows.Single().Enabled);
         });
@@ -31,6 +43,14 @@ public sealed class QuickJumpSettingsPanelTests : IDisposable
         Assert.True(details.Item3);
         Assert.Equal(new[] { "Alias", "Path", "Type", "Enabled" }, details.Item4);
         Assert.True(details.Item5);
+    }
+
+    private QuickJumpSettingsPanel CreatePanel()
+    {
+        var settings = new Flow.Launcher.Plugin.QuickJump.Settings.Settings();
+        var path = CreateFile();
+        settings.CustomEntries.Add(new CustomEntry { Alias = "report", Path = path, Type = CustomEntryType.File, Enabled = true });
+        return new QuickJumpSettingsPanel(settings, new CustomEntryRepository(settings, () => { }), () => { });
     }
 
     public void Dispose()
