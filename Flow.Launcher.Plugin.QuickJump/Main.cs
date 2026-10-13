@@ -37,7 +37,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         _context = Context;
         _settings = Context.API.LoadSettingJsonStorage<Settings.Settings>();
         _customEntries = new CustomEntryRepository(_settings, () => Context.API.SaveSettingJsonStorage<Settings.Settings>());
-        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.2");
+        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.3");
     }
 
     public string GetTranslatedPluginTitle() => QuickJumpText.PluginName();
@@ -271,25 +271,60 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             FocusAddressBar(inputSimulator);
             Thread.Sleep(plan.FocusDelayMilliseconds);
 
-            var editHandle = FindModernAddressEdit(dialogHandle);
-            bool exists = editHandle != HWND.Null;
-            bool visible = exists && IsVisible(editHandle);
+            var preselectedEdit = FindModernAddressEdit(dialogHandle);
+            bool exists = preselectedEdit != HWND.Null;
+            bool visible = exists && IsVisible(preselectedEdit);
             // GetFocus only reports focus for this background plugin thread;
             // inspect the target dialog's GUI thread instead.
             var focused = GetDialogFocusedWindow(dialogHandle);
-            bool hasFocus = visible && focused == editHandle;
+            var selectedEvidence = DescribeModernAddressEdit(preselectedEdit, dialogHandle);
+            var focusedEvidence = DescribeModernAddressEdit(focused, dialogHandle);
+            bool selectedHasFocus = visible && focused == preselectedEdit;
+            bool focusedIsQualified = focusedEvidence.IsQualified();
             bool dialogForeground = PInvoke.GetForegroundWindow() == dialogHandle;
-            bool ready = ModernAddressFocusPlan.IsReady(dialogForeground, exists, visible, hasFocus);
-            QuickJumpDiagnostics.Info($"address focus retry={attempt + 1}/{plan.FocusAttempts} dialogForeground={dialogForeground} editExists={exists} editVisible={visible} focusedClass={Utils.GetClassName(focused)} addressHasFocus={hasFocus} ready={ready}");
+            bool ready = ModernAddressFocusPlan.IsReady(
+                dialogForeground,
+                exists || focused != HWND.Null,
+                visible || IsVisible(focused),
+                selectedHasFocus || focusedIsQualified);
+            QuickJumpDiagnostics.Info($"address focus retry={attempt + 1}/{plan.FocusAttempts} dialogForeground={dialogForeground} preselected={DescribeHandle(preselectedEdit)} selectedPath={DescribePath(selectedEvidence)} focused={DescribeHandle(focused)} focusedPath={DescribePath(focusedEvidence)} selectedHasFocus={selectedHasFocus} focusedQualified={focusedIsQualified} ready={ready}");
             if (ready)
             {
-                return editHandle;
+                // The address shortcut can focus a different—but structurally
+                // equivalent—address Edit than the first one enumerated. Only
+                // use that actual focus if it carries the same strict proof.
+                return focusedIsQualified ? focused : preselectedEdit;
             }
         }
 
         QuickJumpDiagnostics.Warn("address focus abort: qualified edit never gained focus after shortcut");
         return HWND.Null;
     }
+
+    private static ModernAddressEditEvidence DescribeModernAddressEdit(HWND editHandle, HWND dialogHandle)
+    {
+        var classes = GetBoundedAncestorClasses(editHandle, maxDepth: 12);
+        bool isEdit = string.Equals(Utils.GetClassName(editHandle), "Edit", StringComparison.Ordinal);
+        bool belongsToDialog = editHandle != HWND.Null && PInvoke.GetAncestor(editHandle, GET_ANCESTOR_FLAGS.GA_ROOT) == dialogHandle;
+        return new ModernAddressEditEvidence(isEdit, classes, belongsToDialog);
+    }
+
+    private static List<string> GetBoundedAncestorClasses(HWND handle, int maxDepth)
+    {
+        var classes = new List<string>();
+        var current = handle;
+        for (int depth = 0; depth < maxDepth && current != HWND.Null; depth++)
+        {
+            classes.Add(Utils.GetClassName(current) ?? "<unknown>");
+            current = PInvoke.GetParent(current);
+        }
+        return classes;
+    }
+
+    private static string DescribePath(ModernAddressEditEvidence evidence) =>
+        $"isEdit={evidence.IsEdit};owned={evidence.IsOwnedByTargetDialog};classes=[{string.Join(">", evidence.AncestorClasses)}];qualified={evidence.IsQualified()}";
+
+    private static string DescribeHandle(HWND handle) => handle == HWND.Null ? "none" : handle.ToString();
 
     private static unsafe HWND GetDialogFocusedWindow(HWND dialogHandle)
     {

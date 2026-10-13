@@ -16,5 +16,7 @@ IsWindow
 GetWindowThreadProcessId
 GetDlgItem
 GetGUIThreadInfo
+GetAncestor
+GA_ROOT
 GetWindowText
 GetWindowTextLength

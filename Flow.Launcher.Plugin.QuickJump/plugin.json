@@ -4,7 +4,7 @@
     "Name": "QuickJump",
     "Description": "Quickly jump to files and folders in open or save dialogs.",
     "Author": "yorelll",
-    "Version": "1.0.1-diagnostic.2",
+    "Version": "1.0.1-diagnostic.3",
     "Language": "csharp",
     "Website": "https://github.com/yorelll/quckjump",
     "IcoPath": "icon.png",
