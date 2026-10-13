@@ -15,3 +15,6 @@ IsWindowVisible
 IsWindow
 GetWindowThreadProcessId
 GetDlgItem
+GetGUIThreadInfo
+GetWindowText
+GetWindowTextLength

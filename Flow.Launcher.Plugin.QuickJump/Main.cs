@@ -37,7 +37,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         _context = Context;
         _settings = Context.API.LoadSettingJsonStorage<Settings.Settings>();
         _customEntries = new CustomEntryRepository(_settings, () => Context.API.SaveSettingJsonStorage<Settings.Settings>());
-        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.1");
+        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.2");
     }
 
     public string GetTranslatedPluginTitle() => QuickJumpText.PluginName();
@@ -231,16 +231,16 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
     private void ModernFolderJump(string path, HWND dialogHandle)
     {
         var inputSimulator = new WindowsInput.InputSimulator();
-        FocusAddressBar(inputSimulator);
-        var editHandle = WaitForModernAddressEdit(dialogHandle);
+        var editHandle = FocusAndVerifyModernAddressEdit(inputSimulator, dialogHandle);
         if (editHandle == HWND.Null)
         {
-            _context?.API.LogWarn(LogTag, "现代地址栏编辑框不可用；已取消跳转，不会把旧版文件名控件当作地址栏。");
+            _context?.API.LogWarn(LogTag, "现代地址栏未在快捷键后获得焦点；已取消跳转。");
             return;
         }
 
         SetDialogText(editHandle, path);
-        QuickJumpDiagnostics.Info("modern folder inject key=Enter");
+        Thread.Sleep(ModernAddressNavigationPlan.Default.NavigationDelayMilliseconds);
+        QuickJumpDiagnostics.Info("modern folder inject key=Enter after verified address focus");
         inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
     }
 
@@ -250,17 +250,53 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         // address-bar path. Legacy filename controls are routed before this
         // method and therefore never receive the modern one-Enter behavior.
         var inputSimulator = new WindowsInput.InputSimulator();
-        FocusAddressBar(inputSimulator);
-        var editHandle = WaitForModernAddressEdit(dialogHandle);
+        var editHandle = FocusAndVerifyModernAddressEdit(inputSimulator, dialogHandle);
         if (editHandle == HWND.Null)
         {
-            _context?.API.LogWarn(LogTag, "现代地址栏编辑框不可用；已取消跳转，不会把旧版文件名控件当作地址栏。");
+            _context?.API.LogWarn(LogTag, "现代地址栏未在快捷键后获得焦点；已取消跳转。");
             return;
         }
 
         SetDialogText(editHandle, path);
-        QuickJumpDiagnostics.Info("modern file inject key=Enter");
+        Thread.Sleep(ModernAddressNavigationPlan.Default.NavigationDelayMilliseconds);
+        QuickJumpDiagnostics.Info("modern file inject key=Enter after verified address focus");
         inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
+    }
+
+    private HWND FocusAndVerifyModernAddressEdit(WindowsInput.InputSimulator inputSimulator, HWND dialogHandle)
+    {
+        var plan = ModernAddressNavigationPlan.Default;
+        for (int attempt = 0; plan.ShouldTry(attempt); attempt++)
+        {
+            FocusAddressBar(inputSimulator);
+            Thread.Sleep(plan.FocusDelayMilliseconds);
+
+            var editHandle = FindModernAddressEdit(dialogHandle);
+            bool exists = editHandle != HWND.Null;
+            bool visible = exists && IsVisible(editHandle);
+            // GetFocus only reports focus for this background plugin thread;
+            // inspect the target dialog's GUI thread instead.
+            var focused = GetDialogFocusedWindow(dialogHandle);
+            bool hasFocus = visible && focused == editHandle;
+            bool dialogForeground = PInvoke.GetForegroundWindow() == dialogHandle;
+            bool ready = ModernAddressFocusPlan.IsReady(dialogForeground, exists, visible, hasFocus);
+            QuickJumpDiagnostics.Info($"address focus retry={attempt + 1}/{plan.FocusAttempts} dialogForeground={dialogForeground} editExists={exists} editVisible={visible} focusedClass={Utils.GetClassName(focused)} addressHasFocus={hasFocus} ready={ready}");
+            if (ready)
+            {
+                return editHandle;
+            }
+        }
+
+        QuickJumpDiagnostics.Warn("address focus abort: qualified edit never gained focus after shortcut");
+        return HWND.Null;
+    }
+
+    private static unsafe HWND GetDialogFocusedWindow(HWND dialogHandle)
+    {
+        uint processId;
+        uint threadId = PInvoke.GetWindowThreadProcessId(dialogHandle, &processId);
+        GUITHREADINFO info = new() { cbSize = (uint)sizeof(GUITHREADINFO) };
+        return PInvoke.GetGUIThreadInfo(threadId, ref info) ? info.hwndFocus : HWND.Null;
     }
 
     private void FocusAddressBar(WindowsInput.InputSimulator inputSimulator)
@@ -278,25 +314,23 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
     private static void SetDialogText(HWND editHandle, string path)
     {
         var result = Utils.SetWindowText(editHandle, path);
-        QuickJumpDiagnostics.Info($"set-window-text result={result} editClass={Utils.GetClassName(editHandle)}");
+        string currentText = GetWindowText(editHandle);
+        QuickJumpDiagnostics.Info($"set-window-text result={result} editClass={Utils.GetClassName(editHandle)} textMatches={string.Equals(currentText, path, StringComparison.Ordinal)}");
     }
 
-    private static HWND WaitForModernAddressEdit(HWND dialogHandle)
+    private static unsafe string GetWindowText(HWND handle)
     {
-        var retryPlan = new DialogTargetRetryPlan(Attempts: 6, DelayMilliseconds: 100);
-        for (int attempt = 0; retryPlan.ShouldTry(attempt); attempt++)
+        int length = PInvoke.GetWindowTextLength(handle);
+        if (length <= 0)
         {
-            var editHandle = FindModernAddressEdit(dialogHandle);
-            if (editHandle != HWND.Null && IsVisible(editHandle))
-            {
-                return editHandle;
-            }
-            if (attempt + 1 < retryPlan.Attempts)
-            {
-                Thread.Sleep(retryPlan.DelayMilliseconds);
-            }
+            return string.Empty;
         }
-        return HWND.Null;
+
+        fixed (char* buffer = new char[length + 1])
+        {
+            _ = PInvoke.GetWindowText(handle, buffer, length + 1);
+            return new string(buffer);
+        }
     }
 
     private static HWND FindModernAddressEdit(HWND dialogHandle)
