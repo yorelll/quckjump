@@ -1,6 +1,7 @@
 using System;
 using Windows.Win32;
 using Windows.Win32.Foundation;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Flow.Launcher.Plugin.QuickJump.Diagnostics;
 
 namespace Flow.Launcher.Plugin.QuickJump.DialogNavigation;

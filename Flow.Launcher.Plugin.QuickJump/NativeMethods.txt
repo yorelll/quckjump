@@ -17,7 +17,7 @@ GetWindowThreadProcessId
 GetDlgItem
 GetGUIThreadInfo
 GetAncestor
-GA_ROOT
+GET_ANCESTOR_FLAGS
 GetCurrentThreadId
 AttachThreadInput
 SetFocus
