@@ -37,7 +37,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         _context = Context;
         _settings = Context.API.LoadSettingJsonStorage<Settings.Settings>();
         _customEntries = new CustomEntryRepository(_settings, () => Context.API.SaveSettingJsonStorage<Settings.Settings>());
-        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.3");
+        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.4");
     }
 
     public string GetTranslatedPluginTitle() => QuickJumpText.PluginName();
@@ -294,6 +294,19 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
                 // equivalent—address Edit than the first one enumerated. Only
                 // use that actual focus if it carries the same strict proof.
                 return focusedIsQualified ? focused : preselectedEdit;
+            }
+
+            // Some common-dialog hosts leave focus on an ordinary Edit after
+            // the shortcut. Do not use that control. Instead, once per jump,
+            // attach input queues and focus only the exact preselected address
+            // Edit whose structural proof has already been logged above.
+            if (attempt == 0 && dialogForeground && selectedEvidence.IsQualified() && visible)
+            {
+                QuickJumpDiagnostics.Info("address focus shortcut did not focus qualified edit; attempting controlled cross-thread focus");
+                if (CrossThreadAddressFocus.TryFocus(dialogHandle, preselectedEdit))
+                {
+                    return preselectedEdit;
+                }
             }
         }
 

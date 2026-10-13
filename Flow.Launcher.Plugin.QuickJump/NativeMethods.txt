@@ -18,5 +18,8 @@ GetDlgItem
 GetGUIThreadInfo
 GetAncestor
 GA_ROOT
+GetCurrentThreadId
+AttachThreadInput
+SetFocus
 GetWindowText
 GetWindowTextLength
