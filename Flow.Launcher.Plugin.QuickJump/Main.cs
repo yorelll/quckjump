@@ -37,7 +37,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         _context = Context;
         _settings = Context.API.LoadSettingJsonStorage<Settings.Settings>();
         _customEntries = new CustomEntryRepository(_settings, () => Context.API.SaveSettingJsonStorage<Settings.Settings>());
-        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.4");
+        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.5");
     }
 
     public string GetTranslatedPluginTitle() => QuickJumpText.PluginName();
@@ -303,7 +303,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             if (attempt == 0 && dialogForeground && selectedEvidence.IsQualified() && visible)
             {
                 QuickJumpDiagnostics.Info("address focus shortcut did not focus qualified edit; attempting controlled cross-thread focus");
-                if (CrossThreadAddressFocus.TryFocus(dialogHandle, preselectedEdit))
+                if (QualifiedAddressFocus.TryFocus(dialogHandle, preselectedEdit))
                 {
                     return preselectedEdit;
                 }
