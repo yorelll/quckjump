@@ -34,9 +34,6 @@ GetTokenInformation
 TokenIntegrityLevel
 TOKEN_QUERY
 GetCurrentThread
-OpenInputDesktop
-UOI_NAME
-CloseDesktop
 CloseHandle
 GetWindowText
 GetWindowTextLength

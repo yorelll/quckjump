@@ -7,7 +7,6 @@ using FlaUI.UIA3;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Security;
-using Windows.Win32.System.StationsAndDesktops;
 using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Flow.Launcher.Plugin.QuickJump.Diagnostics;
@@ -26,10 +25,13 @@ internal static class ReadOnlyEvidenceCollector
 
     public static unsafe void LogDesktopContext(uint targetThreadId)
     {
-        string worker = GetDesktopName(PInvoke.GetThreadDesktop(PInvoke.GetCurrentThreadId()));
-        string target = targetThreadId == 0 ? "unavailable(no-target-thread)" : GetDesktopName(PInvoke.GetThreadDesktop(targetThreadId));
-        string input = GetInputDesktopName();
-        QuickJumpDiagnostics.Info($"readonly-evidence desktop worker={worker} target={target} input={input}");
+        // The CsWin32 version used by this project does not generate the
+        // desktop-name query with our safe-handle signatures. Record the
+        // desktop handles and explicit limitation without opening/switching a
+        // desktop; this candidate remains strictly read-only.
+        var worker = PInvoke.GetThreadDesktop(PInvoke.GetCurrentThreadId());
+        var target = targetThreadId == 0 ? default : PInvoke.GetThreadDesktop(targetThreadId);
+        QuickJumpDiagnostics.Info($"readonly-evidence desktop workerHandle={worker} targetHandle={target} input=unavailable(name-query-not-generated)");
     }
 
     public static void LogAddressUiaCapabilities(HWND addressEdit, bool addressQualified)
@@ -63,7 +65,7 @@ internal static class ReadOnlyEvidenceCollector
     private static unsafe (IntegrityLevel Level, uint? Rid, int Error) GetCurrentIntegrity()
     {
         using var process = Process.GetCurrentProcess();
-        return GetIntegrity(process.Handle);
+        return GetIntegrity(process.SafeHandle);
     }
 
     private static (IntegrityLevel Level, uint? Rid, int Error) GetProcessIntegrity(uint processId)
@@ -71,7 +73,7 @@ internal static class ReadOnlyEvidenceCollector
         try
         {
             using var process = Process.GetProcessById(checked((int)processId));
-            return GetIntegrity(process.Handle);
+            return GetIntegrity(process.SafeHandle);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
@@ -79,7 +81,7 @@ internal static class ReadOnlyEvidenceCollector
         }
     }
 
-    private static unsafe (IntegrityLevel Level, uint? Rid, int Error) GetIntegrity(nint processHandle)
+    private static unsafe (IntegrityLevel Level, uint? Rid, int Error) GetIntegrity(Microsoft.Win32.SafeHandles.SafeProcessHandle processHandle)
     {
         if (!PInvoke.OpenProcessToken((HANDLE)processHandle, TOKEN_ACCESS_MASK.TOKEN_QUERY, out var token))
         {
@@ -119,48 +121,6 @@ internal static class ReadOnlyEvidenceCollector
         finally
         {
             PInvoke.CloseHandle(token);
-        }
-    }
-
-    private static unsafe string GetDesktopName(HDESK desktop)
-    {
-        if (desktop.IsNull)
-        {
-            return "unavailable";
-        }
-
-        uint required = 0;
-        _ = PInvoke.GetUserObjectInformation(desktop, USER_OBJECT_INFORMATION_INDEX.UOI_NAME, null, 0, &required);
-        if (required == 0)
-        {
-            return $"unavailable(error:{Marshal.GetLastWin32Error()})";
-        }
-
-        var buffer = new char[checked((int)(required / sizeof(char)))];
-        fixed (char* chars = buffer)
-        {
-            if (!PInvoke.GetUserObjectInformation(desktop, USER_OBJECT_INFORMATION_INDEX.UOI_NAME, chars, required, &required))
-            {
-                return $"unavailable(error:{Marshal.GetLastWin32Error()})";
-            }
-        }
-        return new string(buffer).TrimEnd('\0');
-    }
-
-    private static unsafe string GetInputDesktopName()
-    {
-        var desktop = PInvoke.OpenInputDesktop(0, false, (uint)DESKTOP_ACCESS_FLAGS.DESKTOP_READOBJECTS);
-        if (desktop.IsNull)
-        {
-            return $"unavailable(error:{Marshal.GetLastWin32Error()})";
-        }
-        try
-        {
-            return GetDesktopName(desktop);
-        }
-        finally
-        {
-            PInvoke.CloseDesktop(desktop);
         }
     }
 
