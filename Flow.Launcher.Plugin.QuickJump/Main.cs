@@ -37,7 +37,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         _context = Context;
         _settings = Context.API.LoadSettingJsonStorage<Settings.Settings>();
         _customEntries = new CustomEntryRepository(_settings, () => Context.API.SaveSettingJsonStorage<Settings.Settings>());
-        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.7");
+        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.8");
     }
 
     public string GetTranslatedPluginTitle() => QuickJumpText.PluginName();
@@ -266,7 +266,12 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
     private HWND FocusAndVerifyModernAddressEdit(WindowsInput.InputSimulator inputSimulator, HWND dialogHandle)
     {
         var plan = ModernAddressNavigationPlan.Default;
-        NativeEvidenceCollector.LogDialogContext(dialogHandle, FindModernAddressEdit(dialogHandle));
+        var initialAddressEdit = FindModernAddressEdit(dialogHandle);
+        var initialEvidence = DescribeModernAddressEdit(initialAddressEdit, dialogHandle);
+        NativeEvidenceCollector.LogDialogContext(dialogHandle, initialAddressEdit);
+        ReadOnlyEvidenceCollector.LogProcessIntegrity(GetProcessId(dialogHandle));
+        ReadOnlyEvidenceCollector.LogDesktopContext(GetThreadId(dialogHandle));
+        ReadOnlyEvidenceCollector.LogAddressUiaCapabilities(initialAddressEdit, initialEvidence.IsQualified());
         for (int attempt = 0; plan.ShouldTry(attempt); attempt++)
         {
             FocusAddressBar(inputSimulator);
@@ -348,6 +353,19 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         $"isEdit={evidence.IsEdit};owned={evidence.IsOwnedByTargetDialog};classes=[{string.Join(">", evidence.AncestorClasses)}];qualified={evidence.IsQualified()}";
 
     private static string DescribeHandle(HWND handle) => handle == HWND.Null ? "none" : handle.ToString();
+
+    private static unsafe uint GetThreadId(HWND handle)
+    {
+        uint processId;
+        return PInvoke.GetWindowThreadProcessId(handle, &processId);
+    }
+
+    private static unsafe uint GetProcessId(HWND handle)
+    {
+        uint processId;
+        _ = PInvoke.GetWindowThreadProcessId(handle, &processId);
+        return processId;
+    }
 
     private static unsafe HWND GetDialogFocusedWindow(HWND dialogHandle)
     {
