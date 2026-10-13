@@ -34,6 +34,5 @@ GetTokenInformation
 TokenIntegrityLevel
 TOKEN_QUERY
 GetCurrentThread
-CloseHandle
 GetWindowText
 GetWindowTextLength

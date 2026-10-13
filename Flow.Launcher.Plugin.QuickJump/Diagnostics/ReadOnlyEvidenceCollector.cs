@@ -120,7 +120,7 @@ internal static class ReadOnlyEvidenceCollector
         }
         finally
         {
-            PInvoke.CloseHandle(token);
+            token.Dispose();
         }
     }
 
