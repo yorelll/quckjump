@@ -83,7 +83,8 @@ internal static class ReadOnlyEvidenceCollector
 
     private static unsafe (IntegrityLevel Level, uint? Rid, int Error) GetIntegrity(Microsoft.Win32.SafeHandles.SafeProcessHandle processHandle)
     {
-        if (!PInvoke.OpenProcessToken((HANDLE)processHandle, TOKEN_ACCESS_MASK.TOKEN_QUERY, out var token))
+        var handle = new HANDLE((void*)processHandle.DangerousGetHandle());
+        if (!PInvoke.OpenProcessToken(handle, TOKEN_ACCESS_MASK.TOKEN_QUERY, out var token))
         {
             return (IntegrityLevel.Unavailable, null, Marshal.GetLastWin32Error());
         }
