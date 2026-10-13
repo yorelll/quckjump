@@ -23,12 +23,11 @@ AttachThreadInput
 SetFocus
 PeekMessage
 PM_NOREMOVE
-GetLastError
 GetProcessId
 ProcessIdToSessionId
 GetThreadDesktop
 GetUserObjectInformation
-UOI_NAME
+USER_OBJECT_INFORMATION_INDEX
 IsWindowEnabled
 ES_READONLY
 GetWindowText

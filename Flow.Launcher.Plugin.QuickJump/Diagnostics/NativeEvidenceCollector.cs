@@ -34,11 +34,11 @@ internal static class NativeEvidenceCollector
 
     public static void LogImmediateLastError(string operation)
     {
-        // This method must be called immediately after the native operation;
-        // no other P/Invoke is allowed between it and the observed call.
-        var nativeError = PInvoke.GetLastError();
-        int marshaledError = Marshal.GetLastPInvokeError();
-        QuickJumpDiagnostics.Info($"native-evidence {operation} getLastError={nativeError} marshalLastPInvokeError={marshaledError}");
+        // CsWin32 captures SetLastError values for generated P/Invokes. This
+        // method is called directly after each observed native operation.
+        int win32Error = Marshal.GetLastWin32Error();
+        int pInvokeError = Marshal.GetLastPInvokeError();
+        QuickJumpDiagnostics.Info($"native-evidence {operation} marshalLastWin32Error={win32Error} marshalLastPInvokeError={pInvokeError}");
     }
 
     private static string DescribeCurrentProcess()
