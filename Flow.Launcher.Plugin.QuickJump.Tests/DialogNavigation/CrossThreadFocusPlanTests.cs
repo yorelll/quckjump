@@ -29,18 +29,17 @@ public sealed class CrossThreadFocusPlanTests
                 verifiedFocus: true));
     }
 
-    [Theory]
-    [InlineData(false, true, CrossThreadFocusDecision.AbortAttachFailed)]
-    [InlineData(true, false, CrossThreadFocusDecision.AbortSetFocusFailed)]
-    [InlineData(true, true, CrossThreadFocusDecision.AbortVerificationFailed)]
-    public void Decide_FailedNativeStepAbortsWithoutWriting(bool attachSucceeded, bool setFocusSucceeded, CrossThreadFocusDecision expected)
+    [Fact]
+    public void Decide_FailedNativeStepsAbortWithoutWriting()
     {
         Assert.Equal(
-            expected,
-            CrossThreadFocusPlan.Decide(
-                addressEditQualified: true,
-                attachSucceeded: attachSucceeded,
-                setFocusSucceeded: setFocusSucceeded,
-                verifiedFocus: false));
+            CrossThreadFocusDecision.AbortAttachFailed,
+            CrossThreadFocusPlan.Decide(addressEditQualified: true, attachSucceeded: false, setFocusSucceeded: true, verifiedFocus: false));
+        Assert.Equal(
+            CrossThreadFocusDecision.AbortSetFocusFailed,
+            CrossThreadFocusPlan.Decide(addressEditQualified: true, attachSucceeded: true, setFocusSucceeded: false, verifiedFocus: false));
+        Assert.Equal(
+            CrossThreadFocusDecision.AbortVerificationFailed,
+            CrossThreadFocusPlan.Decide(addressEditQualified: true, attachSucceeded: true, setFocusSucceeded: true, verifiedFocus: false));
     }
 }
