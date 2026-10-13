@@ -37,7 +37,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         _context = Context;
         _settings = Context.API.LoadSettingJsonStorage<Settings.Settings>();
         _customEntries = new CustomEntryRepository(_settings, () => Context.API.SaveSettingJsonStorage<Settings.Settings>());
-        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.6");
+        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.7");
     }
 
     public string GetTranslatedPluginTitle() => QuickJumpText.PluginName();
@@ -289,6 +289,15 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
                 visible || IsVisible(focused),
                 selectedHasFocus || focusedIsQualified);
             QuickJumpDiagnostics.Info($"address focus retry={attempt + 1}/{plan.FocusAttempts} dialogForeground={dialogForeground} preselected={DescribeHandle(preselectedEdit)} selectedPath={DescribePath(selectedEvidence)} focused={DescribeHandle(focused)} focusedPath={DescribePath(focusedEvidence)} selectedHasFocus={selectedHasFocus} focusedQualified={focusedIsQualified} ready={ready}");
+            if (attempt == 0)
+            {
+                GuiThreadOwnershipEvidence.Log(
+                    dialogHandle,
+                    preselectedEdit,
+                    focused,
+                    selectedEvidence.IsQualified(),
+                    selectedEvidence.IsOwnedByTargetDialog);
+            }
             if (ready)
             {
                 // The address shortcut can focus a different—but structurally
