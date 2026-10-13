@@ -13,6 +13,7 @@ public sealed class CustomEntryDialogPresentationPlanTests
         Assert.True(plan.UseOwner);
         Assert.False(plan.CenterOnPrimaryScreen);
         Assert.False(plan.TemporarilyTopmost);
+        Assert.True(plan.IsModeless);
     }
 
     [Fact]
@@ -23,5 +24,6 @@ public sealed class CustomEntryDialogPresentationPlanTests
         Assert.False(plan.UseOwner);
         Assert.True(plan.CenterOnPrimaryScreen);
         Assert.True(plan.TemporarilyTopmost);
+        Assert.True(plan.IsModeless);
     }
 }

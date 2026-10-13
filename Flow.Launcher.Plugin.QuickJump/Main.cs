@@ -13,6 +13,7 @@ using Windows.Win32.Foundation;
 using Windows.Win32.UI.WindowsAndMessaging;
 using Flow.Launcher.Plugin.QuickJump.CustomEntries;
 using Flow.Launcher.Plugin.QuickJump.DialogNavigation;
+using Flow.Launcher.Plugin.QuickJump.Diagnostics;
 using Flow.Launcher.Plugin.QuickJump.FileManager;
 using Flow.Launcher.Plugin.QuickJump.Localization;
 using Flow.Launcher.Plugin.QuickJump.Settings;
@@ -36,6 +37,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         _context = Context;
         _settings = Context.API.LoadSettingJsonStorage<Settings.Settings>();
         _customEntries = new CustomEntryRepository(_settings, () => Context.API.SaveSettingJsonStorage<Settings.Settings>());
+        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.1");
     }
 
     public string GetTranslatedPluginTitle() => QuickJumpText.PluginName();
@@ -59,6 +61,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         // Flow 取得焦点后，原生文件对话框通常仍可见但不在前台。尽早缓存其
         // HWND，后续操作不再仅依赖“当前前台窗口”，从而兼容 VS Code 等宿主。
         var capturedDialog = DialogWindowLocator.CaptureVisibleFileDialog();
+        QuickJumpDiagnostics.Info($"query capturedDialog={(capturedDialog == HWND.Null ? "none" : "eligible")}");
         var parsedQuery = QuickJumpQuery.Parse(query.Search);
         var results = _searchService.Search(
             parsedQuery,
@@ -183,6 +186,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
     private bool JumpAction(string path, CustomEntryType type, HWND capturedDialog)
     {
         _context?.API.LogInfo(LogTag, $"准备跳转到 {path}");
+        QuickJumpDiagnostics.Info($"jump action path={path} type={type} captured={(capturedDialog == HWND.Null ? "none" : "present")}");
         var thread = new Thread(() =>
         {
             var dialogHandle = DialogWindowLocator.WaitForReadyTarget(
@@ -194,9 +198,9 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
                 return;
             }
 
-            var route = FileDialogJumpPlan.Select(
-                DialogWindowLocator.GetFileDialogKind(dialogHandle),
-                type);
+            var dialogKind = DialogWindowLocator.GetFileDialogKind(dialogHandle);
+            var route = FileDialogJumpPlan.Select(dialogKind, type);
+            QuickJumpDiagnostics.Info($"jump route kind={dialogKind} entryType={type} route={route}");
             switch (route)
             {
                 case FileDialogJumpRoute.ModernFile:
@@ -235,7 +239,8 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             return;
         }
 
-        Utils.SetWindowText(editHandle, path);
+        SetDialogText(editHandle, path);
+        QuickJumpDiagnostics.Info("modern folder inject key=Enter");
         inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
     }
 
@@ -253,7 +258,8 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             return;
         }
 
-        Utils.SetWindowText(editHandle, path);
+        SetDialogText(editHandle, path);
+        QuickJumpDiagnostics.Info("modern file inject key=Enter");
         inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
     }
 
@@ -265,7 +271,14 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             Strategy.CtrlL => () => inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LCONTROL, WindowsInput.VirtualKeyCode.VK_L),
             _ => () => throw new UnreachableException(),
         };
+        QuickJumpDiagnostics.Info($"address focus inject strategy={_settings?.Strategy}");
         action();
+    }
+
+    private static void SetDialogText(HWND editHandle, string path)
+    {
+        var result = Utils.SetWindowText(editHandle, path);
+        QuickJumpDiagnostics.Info($"set-window-text result={result} editClass={Utils.GetClassName(editHandle)}");
     }
 
     private static HWND WaitForModernAddressEdit(HWND dialogHandle)
@@ -369,7 +382,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             return;
         }
 
-        Utils.SetWindowText(editHandle, path);
+        SetDialogText(editHandle, path);
         var inputSimulator = new WindowsInput.InputSimulator();
         // 首次 Alt+O 可能只是进入文件夹，第二次才确认。
         inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LMENU, WindowsInput.VirtualKeyCode.VK_O);
@@ -385,7 +398,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             return;
         }
 
-        Utils.SetWindowText(editHandle, path);
+        SetDialogText(editHandle, path);
         var inputSimulator = new WindowsInput.InputSimulator();
         // 文件路径只需确认一次；文件夹路径则可能需要先进入目录。
         inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LMENU, WindowsInput.VirtualKeyCode.VK_O);

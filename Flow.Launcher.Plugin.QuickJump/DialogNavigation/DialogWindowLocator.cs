@@ -4,6 +4,7 @@ using System.Threading;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.WindowsAndMessaging;
+using Flow.Launcher.Plugin.QuickJump.Diagnostics;
 
 namespace Flow.Launcher.Plugin.QuickJump.DialogNavigation;
 
@@ -15,6 +16,7 @@ internal static class DialogWindowLocator
     public static HWND CaptureVisibleFileDialog()
     {
         var candidates = GetEligibleVisibleFileDialogs();
+        QuickJumpDiagnostics.Info($"dialog candidates {DescribeVisibleDialogCandidates()} eligible={candidates.Count}");
         return candidates.Count == 1 ? candidates[0] : HWND.Null;
     }
 
@@ -73,16 +75,20 @@ internal static class DialogWindowLocator
                     DialogTargetSource.Foreground => foreground,
                     _ => enumerateTarget(),
                 };
+                QuickJumpDiagnostics.Info($"readiness retry={attempt + 1}/{plan.Attempts} source={source} target={target}");
             }
 
             bool targetIsUsable = isUsable(target);
-            bool targetIsForeground = targetIsUsable && foregroundWindow() == target;
+            var foregroundNow = foregroundWindow();
+            bool targetIsForeground = targetIsUsable && foregroundNow == target;
+            bool flowIsForegroundNow = isFlowForeground();
             var decision = DialogReadinessPlan.Decide(
                 targetIsUsable,
                 targetIsForeground,
-                isFlowForeground(),
+                flowIsForegroundNow,
                 mayActivateTarget: !activationAttempted,
                 retriesExhausted: attempt + 1 >= plan.Attempts);
+            QuickJumpDiagnostics.Info($"readiness retry={attempt + 1}/{plan.Attempts} target={target} usable={targetIsUsable} foreground={foregroundNow} targetForeground={targetIsForeground} flowForeground={flowIsForegroundNow} decision={decision}");
             if (decision == DialogReadinessDecision.Ready)
             {
                 return target;
@@ -90,12 +96,14 @@ internal static class DialogWindowLocator
             if (decision == DialogReadinessDecision.ActivateTarget)
             {
                 activationAttempted = true;
-                _ = activateTarget(target);
+                bool activated = activateTarget(target);
+                QuickJumpDiagnostics.Info($"readiness activation requested target={target} accepted={activated}");
                 // Verify foreground status on a future bounded retry; do not
                 // inject keys merely because SetForegroundWindow returned true.
             }
             if (decision == DialogReadinessDecision.Fail)
             {
+                QuickJumpDiagnostics.Warn($"readiness abort target={target} reason=retry-exhausted-or-unusable");
                 break;
             }
             if (attempt + 1 < plan.Attempts)
@@ -104,6 +112,23 @@ internal static class DialogWindowLocator
             }
         }
         return HWND.Null;
+    }
+
+    private static string DescribeVisibleDialogCandidates()
+    {
+        var descriptions = new List<string>();
+        PInvoke.EnumWindows(EnumProc, 0);
+        return descriptions.Count == 0 ? "visible32770=none" : $"visible32770=[{string.Join(",", descriptions)}]";
+
+        BOOL EnumProc(HWND window, LPARAM _)
+        {
+            if (!string.Equals(Utils.GetClassName(window), "#32770", StringComparison.Ordinal) || !PInvoke.IsWindowVisible(window))
+            {
+                return true;
+            }
+            descriptions.Add($"handle={window};kind={GetFileDialogKind(window)}");
+            return true;
+        }
     }
 
     private static List<HWND> GetEligibleVisibleFileDialogs()

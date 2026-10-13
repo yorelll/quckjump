@@ -97,6 +97,11 @@ internal sealed class CustomEntryEditorDialog : Window, ILocalizedControl
     internal TextBlock ErrorText => _error;
     internal Button SaveButton => _save;
 
+    internal bool SavedSuccessfully { get; private set; }
+
+    /// <summary>Set by the context-menu presenter so saving closes a modeless editor.</summary>
+    internal bool IsModelessPresentation { get; set; }
+
     public void RefreshLocalizedValues() => UpdateDetectedType();
 
     private static TextBlock Label(string resourceKey, int row)
@@ -155,7 +160,18 @@ internal sealed class CustomEntryEditorDialog : Window, ILocalizedControl
             _error.Text = QuickJumpText.Error(error);
             return;
         }
-        if (IsVisible) DialogResult = true;
+        SavedSuccessfully = true;
+        if (IsVisible)
+        {
+            if (IsModelessPresentation)
+            {
+                Close();
+            }
+            else if (IsVisible)
+            {
+                DialogResult = true;
+            }
+        }
     }
 
     private string CreateInitialAlias(string path, CustomEntryType type) => string.IsNullOrWhiteSpace(path) ? QuickJumpText.AliasFallback() : AliasGenerator.CreateDefault(path, type, _repository.GetAll());
