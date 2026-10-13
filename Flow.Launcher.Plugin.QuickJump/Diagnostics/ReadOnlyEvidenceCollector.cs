@@ -7,6 +7,7 @@ using FlaUI.UIA3;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Security;
+using Windows.Win32.System.StationsAndDesktops;
 using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Flow.Launcher.Plugin.QuickJump.Diagnostics;
