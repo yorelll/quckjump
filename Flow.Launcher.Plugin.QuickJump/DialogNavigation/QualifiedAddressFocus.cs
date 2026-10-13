@@ -34,11 +34,12 @@ internal static class QualifiedAddressFocus
         try
         {
             attached = targetThread == currentThread || PInvoke.AttachThreadInput(currentThread, targetThread, true);
-            int attachError = attached ? 0 : Marshal.GetLastWin32Error();
-            QuickJumpDiagnostics.Info($"qualified-focus attachSucceeded={attached} error={attachError}");
+            NativeEvidenceCollector.LogImmediateLastError("AttachThreadInput");
+            QuickJumpDiagnostics.Info($"qualified-focus attachSucceeded={attached}");
             if (attached)
             {
                 var previousFocus = PInvoke.SetFocus(addressEdit);
+                NativeEvidenceCollector.LogImmediateLastError("SetFocus");
                 attachVerified = GetDialogFocusedWindow(dialogHandle) == addressEdit;
                 QuickJumpDiagnostics.Info($"qualified-focus setFocusPrevious={previousFocus} attachVerified={attachVerified}");
                 if (attachVerified)
@@ -56,8 +57,8 @@ internal static class QualifiedAddressFocus
             if (attached && targetThread != currentThread)
             {
                 bool detached = PInvoke.AttachThreadInput(currentThread, targetThread, false);
-                int detachError = detached ? 0 : Marshal.GetLastWin32Error();
-                QuickJumpDiagnostics.Info($"qualified-focus detachSucceeded={detached} error={detachError}");
+                NativeEvidenceCollector.LogImmediateLastError("AttachThreadInputDetach");
+                QuickJumpDiagnostics.Info($"qualified-focus detachSucceeded={detached}");
             }
         }
 
@@ -77,6 +78,7 @@ internal static class QualifiedAddressFocus
         // PM_NOREMOVE creates this worker thread's queue without consuming an
         // input message, satisfying AttachThreadInput's documented precondition.
         _ = PInvoke.PeekMessage(&message, HWND.Null, 0, 0, PEEK_MESSAGE_REMOVE_TYPE.PM_NOREMOVE);
+        NativeEvidenceCollector.LogImmediateLastError("PeekMessage");
         return true;
     }
 

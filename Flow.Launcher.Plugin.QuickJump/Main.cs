@@ -37,7 +37,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         _context = Context;
         _settings = Context.API.LoadSettingJsonStorage<Settings.Settings>();
         _customEntries = new CustomEntryRepository(_settings, () => Context.API.SaveSettingJsonStorage<Settings.Settings>());
-        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.5");
+        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.6");
     }
 
     public string GetTranslatedPluginTitle() => QuickJumpText.PluginName();
@@ -266,6 +266,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
     private HWND FocusAndVerifyModernAddressEdit(WindowsInput.InputSimulator inputSimulator, HWND dialogHandle)
     {
         var plan = ModernAddressNavigationPlan.Default;
+        NativeEvidenceCollector.LogDialogContext(dialogHandle, FindModernAddressEdit(dialogHandle));
         for (int attempt = 0; plan.ShouldTry(attempt); attempt++)
         {
             FocusAddressBar(inputSimulator);
@@ -355,7 +356,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             Strategy.CtrlL => () => inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LCONTROL, WindowsInput.VirtualKeyCode.VK_L),
             _ => () => throw new UnreachableException(),
         };
-        QuickJumpDiagnostics.Info($"address focus inject strategy={_settings?.Strategy}");
+        QuickJumpDiagnostics.Info($"address focus inject strategy={_settings?.Strategy} inputDispatch=HInputSimulator acceptedCount=unavailable-void-api");
         action();
     }
 

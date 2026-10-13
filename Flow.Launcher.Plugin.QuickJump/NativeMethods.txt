@@ -23,5 +23,13 @@ AttachThreadInput
 SetFocus
 PeekMessage
 PM_NOREMOVE
+GetLastError
+GetProcessId
+ProcessIdToSessionId
+GetThreadDesktop
+GetUserObjectInformation
+UOI_NAME
+IsWindowEnabled
+ES_READONLY
 GetWindowText
 GetWindowTextLength
