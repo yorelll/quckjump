@@ -60,10 +60,11 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         // Flow 取得焦点后，原生文件对话框通常仍可见但不在前台。尽早缓存其
         // HWND，后续操作不再仅依赖“当前前台窗口”。
         var capturedDialog = DialogWindowLocator.CaptureVisibleFileDialog();
-        // Retain the original foreground standard dialog even when structural
-        // qualification fails, so an elevated target can still be explained.
+        // Retain an unambiguously attributable standard dialog even when
+        // structural qualification fails, so an elevated target can still be
+        // explained. Flow's own process and ambiguous candidates are excluded.
         var fallbackDialog = capturedDialog == HWND.Null
-            ? DialogWindowLocator.CaptureForegroundStandardDialog()
+            ? DialogWindowLocator.CaptureFallbackStandardDialog()
             : default;
         var parsedQuery = QuickJumpQuery.Parse(query.Search);
         var results = _searchService.Search(

@@ -19,23 +19,40 @@ internal static class DialogWindowLocator
     }
 
     /// <summary>
-    /// Fallback capture used when structural qualification fails. Returns the
-    /// original foreground standard dialog and its process so an elevated
-    /// target can still produce an accurate explanation instead of silence.
+    /// Fallback capture used when structural qualification fails. It never
+    /// trusts the current foreground window, which may already be Flow itself.
+    /// Instead it enumerates visible standard dialogs, excludes Flow's process,
+    /// and attributes one only when a single unrelated process owns them all.
     /// </summary>
-    public static unsafe FallbackDialogCapture CaptureForegroundStandardDialog()
+    public static unsafe FallbackDialogCapture CaptureFallbackStandardDialog()
     {
-        var foreground = PInvoke.GetForegroundWindow();
-        if (foreground == HWND.Null ||
-            !PInvoke.IsWindowVisible(foreground) ||
-            !string.Equals(Utils.GetClassName(foreground), "#32770", StringComparison.Ordinal))
-        {
-            return default;
-        }
+        uint currentProcessId = (uint)Environment.ProcessId;
+        var candidates = GetVisibleStandardDialogCandidates();
+        var selected = FallbackDialogSelection.Select(candidates, currentProcessId);
+        return selected is StandardDialogCandidate candidate
+            ? new FallbackDialogCapture(candidate.Handle, candidate.ProcessId)
+            : default;
+    }
 
-        uint processId;
-        _ = PInvoke.GetWindowThreadProcessId(foreground, &processId);
-        return new FallbackDialogCapture(foreground, processId);
+    private static List<StandardDialogCandidate> GetVisibleStandardDialogCandidates()
+    {
+        var candidates = new List<StandardDialogCandidate>();
+        PInvoke.EnumWindows(EnumProc, 0);
+        return candidates;
+
+        unsafe BOOL EnumProc(HWND window, LPARAM _)
+        {
+            if (!PInvoke.IsWindowVisible(window) ||
+                !string.Equals(Utils.GetClassName(window), "#32770", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            uint processId;
+            _ = PInvoke.GetWindowThreadProcessId(window, &processId);
+            candidates.Add(new StandardDialogCandidate(window, processId));
+            return true;
+        }
     }
 
     /// <summary>

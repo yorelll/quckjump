@@ -73,6 +73,8 @@ internal sealed class PluginMessagePresenter
                 {
                     _activeDialog = null;
                 }
+                // Topmost is only needed while the message is visible.
+                dialog.Topmost = false;
             };
 
             // Unowned and topmost while open: it must be readable even over an

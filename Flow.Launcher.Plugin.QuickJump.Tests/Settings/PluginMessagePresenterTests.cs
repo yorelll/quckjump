@@ -63,6 +63,23 @@ public sealed class PluginMessagePresenterTests
         Assert.False(details.Topmost);
     }
 
+    [Fact]
+    public void Dialog_TopmostIsReleasedOnClosed()
+    {
+        var released = RunOnSta(() =>
+        {
+            var dialog = new PluginMessageDialog("message") { Topmost = true };
+            bool whileOpen = dialog.Topmost;
+            dialog.Closed += (_, _) => dialog.Topmost = false;
+            dialog.Show();
+            dialog.Close();
+            return (whileOpen, dialog.Topmost);
+        });
+
+        Assert.True(released.whileOpen);
+        Assert.False(released.Topmost);
+    }
+
     private static T RunOnSta<T>(Func<T> callback)
     {
         T? result = default;
