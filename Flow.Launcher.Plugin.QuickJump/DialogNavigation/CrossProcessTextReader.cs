@@ -44,7 +44,7 @@ internal static class CrossProcessTextReader
                 handle,
                 PInvoke.WM_GETTEXT,
                 (WPARAM)MaximumTextLength,
-                (LPARAM)pointer,
+                (LPARAM)(nint)pointer,
                 SEND_MESSAGE_TIMEOUT_FLAGS.SMTO_ABORTIFHUNG | SEND_MESSAGE_TIMEOUT_FLAGS.SMTO_BLOCK,
                 TimeoutMilliseconds,
                 out _).Value;
