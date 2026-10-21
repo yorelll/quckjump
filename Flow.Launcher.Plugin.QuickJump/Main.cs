@@ -246,7 +246,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
     /// an elevated target. Access denied while reading the target token is
     /// treated as likely elevated.
     /// </summary>
-    private static bool IsElevatedTarget(HWND dialogHandle)
+    private static unsafe bool IsElevatedTarget(HWND dialogHandle)
     {
         uint processId;
         _ = PInvoke.GetWindowThreadProcessId(dialogHandle, &processId);
