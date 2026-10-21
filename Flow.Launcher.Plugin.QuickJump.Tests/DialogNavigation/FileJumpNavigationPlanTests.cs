@@ -26,7 +26,7 @@ public sealed class FileJumpNavigationPlanTests
     [Fact]
     public void IsNavigationVerified_RequiresObservedEvidenceOfTheExpectedFolder()
     {
-        string folder = Path.Combine(Path.GetTempPath(), "quickjump-parent");
+        const string folder = @"C:\Users\me\quickjump-parent";
 
         Assert.True(FileJumpNavigationPlan.IsNavigationVerified(folder, @"C:\Users\me\quickjump-parent\", null));
         Assert.True(FileJumpNavigationPlan.IsNavigationVerified(folder, null, "Open - quickjump-parent"));

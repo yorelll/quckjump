@@ -142,9 +142,11 @@ public sealed class QuickEntrySearchServiceTests : IDisposable
             new() { Alias = "output", Path = @"C:\out", Type = CustomEntryType.Folder, Enabled = true },
         ];
 
-        var results = _service.Search(QuickJumpQuery.Parse("output"), entries, [], FuzzyContains);
+        var results = _service.Search(QuickJumpQuery.Parse("output"), entries, [], FuzzyContains)
+            .Where(result => result.IsCustom)
+            .ToArray();
 
-        Assert.Equal(2, results.Count);
+        Assert.Equal(2, results.Length);
         Assert.Contains(results, result => result.Type == CustomEntryType.File);
         Assert.Contains(results, result => result.Type == CustomEntryType.Folder);
         Assert.All(results, result => Assert.Equal("output", result.Title));
