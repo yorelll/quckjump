@@ -37,7 +37,7 @@ internal static class DialogWindowLocator
     private static List<StandardDialogCandidate> GetVisibleStandardDialogCandidates()
     {
         var candidates = new List<StandardDialogCandidate>();
-        PInvoke.EnumWindows(EnumProc, 0);
+        PInvoke.EnumWindows(EnumProc, default);
         return candidates;
 
         unsafe BOOL EnumProc(HWND window, LPARAM _)
