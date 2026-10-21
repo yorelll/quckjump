@@ -24,14 +24,47 @@ public sealed class FileJumpNavigationPlanTests
     }
 
     [Fact]
-    public void IsNavigationVerified_RequiresObservedEvidenceOfTheExpectedFolder()
+    public void Verify_ConfirmsMatchingReadableAddressText()
     {
         const string folder = @"C:\Users\me\quickjump-parent";
+        var address = new ControlTextRead(true, @"C:\Users\me\quickjump-parent\");
 
-        Assert.True(FileJumpNavigationPlan.IsNavigationVerified(folder, @"C:\Users\me\quickjump-parent\", null));
-        Assert.True(FileJumpNavigationPlan.IsNavigationVerified(folder, null, "Open - quickjump-parent"));
-        Assert.False(FileJumpNavigationPlan.IsNavigationVerified(folder, @"C:\Users\me\other\", "Open - other"));
-        Assert.False(FileJumpNavigationPlan.IsNavigationVerified(string.Empty, @"C:\Users\me\quickjump-parent", null));
+        Assert.Equal(NavigationVerification.Confirmed, FileJumpNavigationPlan.Verify(folder, address, null));
+    }
+
+    [Fact]
+    public void Verify_ReportsNotNavigatedForReadableMismatch()
+    {
+        const string folder = @"C:\Users\me\quickjump-parent";
+        var address = new ControlTextRead(true, @"C:\Users\me\other\");
+
+        Assert.Equal(NavigationVerification.NotNavigated, FileJumpNavigationPlan.Verify(folder, address, "Open - other"));
+    }
+
+    [Fact]
+    public void Verify_UnreadableTextIsUnverifiableAndDoesNotBecomeProofOfFailure()
+    {
+        const string folder = @"C:\Users\me\quickjump-parent";
+        var address = new ControlTextRead(false, null);
+
+        Assert.Equal(NavigationVerification.Unverifiable, FileJumpNavigationPlan.Verify(folder, address, null));
+        Assert.Equal(NavigationVerification.Unverifiable, FileJumpNavigationPlan.Verify(folder, address, "Open - quickjump-parent"));
+    }
+
+    [Fact]
+    public void Verify_UsesWindowTitleOnlyAsAuxiliaryEvidence()
+    {
+        const string folder = @"C:\Users\me\quickjump-parent";
+        var emptyReadableAddress = new ControlTextRead(true, string.Empty);
+
+        Assert.Equal(NavigationVerification.Confirmed, FileJumpNavigationPlan.Verify(folder, emptyReadableAddress, "Open - quickjump-parent"));
+        Assert.Equal(NavigationVerification.NotNavigated, FileJumpNavigationPlan.Verify(folder, emptyReadableAddress, null));
+    }
+
+    [Fact]
+    public void UnverifiableFallback_StillFillsFileNameWithoutSecondEnter()
+    {
+        Assert.Equal(NavigationFallback.FillFileName, FileJumpNavigationPlan.DefaultUnverifiableFallback);
     }
 
     [Fact]

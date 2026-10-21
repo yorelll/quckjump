@@ -297,11 +297,20 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         Thread.Sleep(ModernAddressNavigationPlan.Default.NavigationDelayMilliseconds);
         inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
 
-        if (!WaitForParentNavigation(dialogHandle, parentFolder))
+        var verification = WaitForParentNavigation(dialogHandle, parentFolder);
+        if (verification == NavigationVerification.NotNavigated)
         {
             LogWarn("文件对话框未在有界重试内导航到目标父文件夹，已取消文件跳转。");
             NotifyAndRestore(QuickJumpText.JumpFileDialogUnavailable());
             return;
+        }
+
+        if (verification == NavigationVerification.Unverifiable)
+        {
+            // The address text could not be read cross-process. No second
+            // Enter is sent and no full file path is written; only the bare
+            // file name is filled so the user can verify the folder manually.
+            LogWarn("无法读取文件对话框地址栏文本；将只填入文件名，请用户确认所在文件夹。");
         }
 
         var fileEdit = WaitForFileNameEdit(dialogHandle);
@@ -316,19 +325,45 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         SetDialogText(fileEdit, fileName);
     }
 
-    private static bool WaitForParentNavigation(HWND dialogHandle, string parentFolder)
+    private static NavigationVerification WaitForParentNavigation(HWND dialogHandle, string parentFolder)
     {
+        bool unverifiable = false;
         for (int attempt = 0; FileJumpNavigationPlan.ShouldVerify(attempt); attempt++)
         {
-            string? address = GetWindowText(FindModernAddressEdit(dialogHandle));
-            string? title = GetWindowText(dialogHandle);
-            if (FileJumpNavigationPlan.IsNavigationVerified(parentFolder, address, title))
+            var address = CrossProcessTextReader.Read(FindModernAddressEdit(dialogHandle));
+            string? title = ReadWindowTitle(dialogHandle);
+            var state = FileJumpNavigationPlan.Verify(parentFolder, address, title);
+            if (state == NavigationVerification.Confirmed)
             {
-                return true;
+                return NavigationVerification.Confirmed;
+            }
+            if (state == NavigationVerification.Unverifiable)
+            {
+                unverifiable = true;
             }
             Thread.Sleep(FileJumpNavigationPlan.DefaultVerificationDelayMilliseconds);
         }
-        return false;
+
+        return unverifiable
+            ? NavigationVerification.Unverifiable
+            : NavigationVerification.NotNavigated;
+    }
+
+    private static unsafe string? ReadWindowTitle(HWND dialogHandle)
+    {
+        // Window titles are process-owned top-level captions, so GetWindowText
+        // is valid here; it is auxiliary evidence only.
+        int length = PInvoke.GetWindowTextLength(dialogHandle);
+        if (length <= 0)
+        {
+            return null;
+        }
+
+        fixed (char* buffer = new char[length + 1])
+        {
+            _ = PInvoke.GetWindowText(dialogHandle, buffer, length + 1);
+            return new string(buffer);
+        }
     }
 
     private static HWND WaitForFileNameEdit(HWND dialogHandle)
@@ -434,21 +469,6 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
     }
 
     private static void SetDialogText(HWND editHandle, string text) => _ = Utils.SetWindowText(editHandle, text);
-
-    private static unsafe string GetWindowText(HWND handle)
-    {
-        int length = PInvoke.GetWindowTextLength(handle);
-        if (length <= 0)
-        {
-            return string.Empty;
-        }
-
-        fixed (char* buffer = new char[length + 1])
-        {
-            _ = PInvoke.GetWindowText(handle, buffer, length + 1);
-            return new string(buffer);
-        }
-    }
 
     private static HWND FindModernAddressEdit(HWND dialogHandle)
     {

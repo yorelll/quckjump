@@ -2,7 +2,10 @@ GetForegroundWindow
 SetForegroundWindow
 GetClassName
 SendMessage
+SendMessageTimeout
 WM_SETTEXT
+WM_GETTEXT
+SEND_MESSAGE_TIMEOUT_FLAGS
 FindWindowEx
 GetWindowLong
 WINDOW_STYLE
