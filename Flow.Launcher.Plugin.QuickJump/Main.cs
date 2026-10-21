@@ -29,6 +29,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
     private CustomEntryRepository? _customEntries;
     private readonly QuickEntrySearchService _searchService = new();
     private readonly CustomEntryDialogPresenter _customEntryDialogPresenter = new();
+    private readonly PluginMessagePresenter _messagePresenter = new();
 
     public void Init(PluginInitContext context)
     {
@@ -59,6 +60,11 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         // Flow 取得焦点后，原生文件对话框通常仍可见但不在前台。尽早缓存其
         // HWND，后续操作不再仅依赖“当前前台窗口”。
         var capturedDialog = DialogWindowLocator.CaptureVisibleFileDialog();
+        // Retain the original foreground standard dialog even when structural
+        // qualification fails, so an elevated target can still be explained.
+        var fallbackDialog = capturedDialog == HWND.Null
+            ? DialogWindowLocator.CaptureForegroundStandardDialog()
+            : default;
         var parsedQuery = QuickJumpQuery.Parse(query.Search);
         var results = _searchService.Search(
             parsedQuery,
@@ -68,7 +74,9 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
 
         // Flow 以 Score 排序；间隔分数保留确定性顺序。
         const int step = 10_000;
-        return results.Select((result, index) => ToFlowResult(result, int.MaxValue - index * step, capturedDialog)).ToList();
+        return results
+            .Select((result, index) => ToFlowResult(result, int.MaxValue - index * step, capturedDialog, fallbackDialog))
+            .ToList();
     }
 
     public List<Result> LoadContextMenus(Result selectedResult)
@@ -84,7 +92,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             Title = QuickJumpText.ContextJump(),
             SubTitle = entry.Path,
             IcoPath = IconFor(entry),
-            Action = _ => JumpAction(entry.Path, entry.Type, context.CapturedDialog),
+            Action = _ => JumpAction(entry.Path, entry.Type, context.CapturedDialog, context.FallbackDialog),
         };
         var showAction = new Result
         {
@@ -124,12 +132,12 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         return fileManagers.SelectMany(manager => manager.GetEntries());
     }
 
-    private Result ToFlowResult(QuickEntryResult entry, int score, HWND capturedDialog)
+    private Result ToFlowResult(QuickEntryResult entry, int score, HWND capturedDialog, FallbackDialogCapture fallbackDialog)
     {
         string typeLabel = entry.IsCustom
             ? entry.Type == CustomEntryType.File ? QuickJumpText.CustomFile() : QuickJumpText.CustomFolder()
             : entry.IsLiteral ? QuickJumpText.LiteralPath() : QuickJumpText.OpenFolder();
-        var resultContext = new QuickJumpResultContext(entry, capturedDialog);
+        var resultContext = new QuickJumpResultContext(entry, capturedDialog, fallbackDialog);
         return new Result
         {
             Title = entry.Title,
@@ -137,7 +145,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             IcoPath = IconFor(entry),
             Action = ctx => ctx.SpecialKeyState.CtrlPressed
                 ? CopyAction(entry.Path)
-                : JumpAction(entry.Path, entry.Type, capturedDialog),
+                : JumpAction(entry.Path, entry.Type, capturedDialog, fallbackDialog),
             ContextData = resultContext,
             Score = score,
         };
@@ -149,7 +157,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
 
     private bool ShowAction(string text)
     {
-        _context?.API.ShowMsg(text);
+        _messagePresenter.Show(text);
         return false;
     }
 
@@ -168,7 +176,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
 
         if (!PathTypeDetector.TryDetect(path, out _, out var error))
         {
-            _context?.API.ShowMsg(error is null ? QuickJumpText.AddExistingOnly() : QuickJumpText.Error(error));
+            _messagePresenter.Show(error is null ? QuickJumpText.AddExistingOnly() : QuickJumpText.Error(error));
             return false;
         }
 
@@ -176,11 +184,11 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         // scheduled on Flow's UI dispatcher, so it appears immediately even
         // after Flow hides its search window.
         _customEntryDialogPresenter.ShowForPath(_customEntries, path, () =>
-            _context?.API.ShowMsg(QuickJumpText.AddSuccess()));
+            _messagePresenter.Show(QuickJumpText.AddSuccess()));
         return false;
     }
 
-    private bool JumpAction(string path, CustomEntryType type, HWND capturedDialog)
+    private bool JumpAction(string path, CustomEntryType type, HWND capturedDialog, FallbackDialogCapture fallbackDialog)
     {
         var thread = new Thread(() =>
         {
@@ -189,7 +197,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             // check must not wait for readiness first.
             if (capturedDialog != HWND.Null && IsElevatedTarget(capturedDialog))
             {
-                NotifyAndRestore(QuickJumpText.JumpElevatedTarget());
+                Fail(JumpFailure.ElevatedTarget);
                 return;
             }
 
@@ -198,13 +206,20 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
                 isFlowForeground: IsFlowForeground);
             if (dialogHandle == HWND.Null)
             {
-                LogWarn("原生文件对话框未在有界重试内成为前台窗口，已取消跳转。");
+                var failure = JumpFailurePlan.DecideNoDialogFailure(
+                    fallbackDialog.Found,
+                    fallbackDialog.ProcessId,
+                    (uint)Environment.ProcessId,
+                    processId => UipiPlan.Decide(
+                        ProcessIntegrityReader.GetCurrent(),
+                        ProcessIntegrityReader.Get(processId)) == UipiDecision.BlockElevatedTarget);
+                Fail(failure);
                 return;
             }
 
             if (IsElevatedTarget(dialogHandle))
             {
-                NotifyAndRestore(QuickJumpText.JumpElevatedTarget());
+                Fail(JumpFailure.ElevatedTarget);
                 return;
             }
 
@@ -220,7 +235,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
                     ModernFilePickerFileJump(path, dialogHandle);
                     break;
                 case FileDialogJumpRoute.ModernFolderPickerFile:
-                    NotifyAndRestore(QuickJumpText.JumpFolderPickerWithFile());
+                    Fail(JumpFailure.FolderPickerWithFile);
                     break;
                 case FileDialogJumpRoute.LegacyFile:
                     FileJumpOnLegacyDialog(path, dialogHandle);
@@ -229,7 +244,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
                     FolderJumpOnLegacyDialog(path, dialogHandle);
                     break;
                 default:
-                    LogWarn("已验证的原生文件对话框结构在跳转前发生变化，已取消跳转。");
+                    Fail(JumpFailure.DialogStructureChanged);
                     break;
             }
         });
@@ -260,7 +275,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         var editHandle = FocusAndVerifyModernAddressEdit(inputSimulator, dialogHandle);
         if (editHandle == HWND.Null)
         {
-            LogWarn("现代地址栏未在快捷键后获得焦点，已取消跳转。");
+            Fail(JumpFailure.AddressBarFocusFailed);
             return;
         }
 
@@ -280,8 +295,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         string? fileName = FileJumpNavigationPlan.GetFileName(path);
         if (parentFolder is null || fileName is null)
         {
-            LogWarn("所选文件没有有效的父文件夹。");
-            NotifyAndRestore(QuickJumpText.JumpParentMissing());
+            Fail(JumpFailure.ParentFolderMissing);
             return;
         }
 
@@ -289,7 +303,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         var addressEdit = FocusAndVerifyModernAddressEdit(inputSimulator, dialogHandle);
         if (addressEdit == HWND.Null)
         {
-            LogWarn("现代地址栏未在快捷键后获得焦点，已取消文件跳转。");
+            Fail(JumpFailure.AddressBarFocusFailed);
             return;
         }
 
@@ -300,8 +314,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         var verification = WaitForParentNavigation(dialogHandle, parentFolder);
         if (verification == NavigationVerification.NotNavigated)
         {
-            LogWarn("文件对话框未在有界重试内导航到目标父文件夹，已取消文件跳转。");
-            NotifyAndRestore(QuickJumpText.JumpFileDialogUnavailable());
+            Fail(JumpFailure.NavigationFailed);
             return;
         }
 
@@ -316,8 +329,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         var fileEdit = WaitForFileNameEdit(dialogHandle);
         if (fileEdit == HWND.Null)
         {
-            LogWarn("文件对话框未提供可验证的文件名输入框，已取消文件跳转。");
-            NotifyAndRestore(QuickJumpText.JumpFileNameNotFound());
+            Fail(JumpFailure.FileNameNotFound);
             return;
         }
 
@@ -549,7 +561,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         var editHandle = FindLegacyEdit(dialogHandle);
         if (editHandle == HWND.Null)
         {
-            LogWarn("旧版对话框中未找到文件名输入框。");
+            Fail(JumpFailure.LegacyFileNameFieldMissing);
             return;
         }
 
@@ -565,7 +577,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         var editHandle = FindLegacyEdit(dialogHandle);
         if (editHandle == HWND.Null)
         {
-            LogWarn("旧版对话框中未找到文件名输入框。");
+            Fail(JumpFailure.LegacyFileNameFieldMissing);
             return;
         }
 
@@ -601,26 +613,19 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             () => _context.API.SaveSettingJsonStorage<Settings.Settings>());
     }
 
-    private void NotifyAndRestore(string message)
+    /// <summary>
+    /// Every user-visible jump failure routes here. The message is shown in a
+    /// dedicated top-level dialog because Flow's ShowMsg may be hidden behind
+    /// the dialog, and an elevated target can cover the Flow window entirely.
+    /// </summary>
+    private void Fail(JumpFailure failure)
     {
-        var dispatcher = Application.Current?.Dispatcher;
-        void ActionBody()
-        {
-            _context?.API.ShowMainWindow();
-            _context?.API.ShowMsg(message);
-        }
-
-        if (dispatcher is not null && !dispatcher.HasShutdownStarted)
-        {
-            dispatcher.BeginInvoke(ActionBody);
-        }
-        else
-        {
-            ActionBody();
-        }
+        string message = QuickJumpText.Failure(failure);
+        LogWarn(message);
+        _messagePresenter.Show(message);
     }
 
     private void LogWarn(string message) => _context?.API.LogWarn(LogTag, message);
 
-    private sealed record QuickJumpResultContext(QuickEntryResult Entry, HWND CapturedDialog);
+    private sealed record QuickJumpResultContext(QuickEntryResult Entry, HWND CapturedDialog, FallbackDialogCapture FallbackDialog);
 }

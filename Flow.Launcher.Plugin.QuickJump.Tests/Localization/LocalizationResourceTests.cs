@@ -34,7 +34,7 @@ public sealed class LocalizationResourceTests
     {
         string manifestPath = Path.Combine(AppContext.BaseDirectory, "plugin.json");
         using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
-        Assert.Equal("1.0.0", manifest.RootElement.GetProperty("Version").GetString());
+        Assert.Equal("1.0.1", manifest.RootElement.GetProperty("Version").GetString());
         Assert.Equal("Quickly jump to files and folders in open or save dialogs.", manifest.RootElement.GetProperty("Description").GetString());
     }
 
@@ -44,6 +44,12 @@ public sealed class LocalizationResourceTests
     [InlineData("quickjump_editor_choose_folder")]
     [InlineData("quickjump_settings_address_help")]
     [InlineData("quickjump_error_path_missing")]
+    [InlineData("quickjump_dialog_title")]
+    [InlineData("quickjump_dialog_ok")]
+    [InlineData("quickjump_jump_elevated_target")]
+    [InlineData("quickjump_jump_dialog_not_found")]
+    [InlineData("quickjump_jump_folder_picker_with_file")]
+    [InlineData("quickjump_jump_address_bar_failed")]
     public void LanguageDictionaries_ContainAllCriticalUiKeys(string key)
     {
         Assert.True(Load("en.xaml").ContainsKey(key));

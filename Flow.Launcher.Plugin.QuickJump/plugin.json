@@ -4,9 +4,9 @@
     "Name": "QuickJump",
     "Description": "Quickly jump to files and folders in open or save dialogs.",
     "Author": "yorelll",
-    "Version": "1.0.0",
+    "Version": "1.0.1",
     "Language": "csharp",
-    "Website": "https://github.com/yorelll/quckjump",
+    "Website": "https://github.com/yorelll/quickjump",
     "IcoPath": "icon.png",
     "ExecuteFileName": "Flow.Launcher.Plugin.QuickJump.dll"
 }

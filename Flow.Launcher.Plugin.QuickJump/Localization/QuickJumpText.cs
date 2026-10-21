@@ -38,6 +38,25 @@ internal static class QuickJumpText
     public static string JumpFileDialogUnavailable() => IsInitialized ? Localize.quickjump_jump_file_dialog_unavailable() : "The file dialog structure changed before QuickJump could complete the jump. The action was cancelled.";
     public static string JumpFileNameNotFound() => IsInitialized ? Localize.quickjump_jump_filename_not_found() : "QuickJump navigated to the file's folder but could not find the dialog's filename field. The file name was not filled in.";
     public static string JumpParentMissing() => IsInitialized ? Localize.quickjump_jump_parent_missing() : "The selected file no longer has a valid parent folder.";
+    public static string JumpAddressBarFailed() => IsInitialized ? Localize.quickjump_jump_address_bar_failed() : "QuickJump could not focus the file dialog's address bar. Try switching Alt+D / Ctrl+L in the settings, or navigate to the target manually.";
+    public static string JumpLegacyEditMissing() => IsInitialized ? Localize.quickjump_jump_legacy_edit_missing() : "The legacy file dialog did not expose a filename field, so the jump was cancelled.";
+    public static string JumpDialogNotFound() => IsInitialized ? Localize.quickjump_jump_dialog_not_found() : "No available native file dialog was found. Open an Open, Save, or folder-selection dialog, then try again.";
+    public static string DialogTitle() => IsInitialized ? Localize.quickjump_dialog_title() : "QuickJump";
+    public static string DialogOk() => IsInitialized ? Localize.quickjump_dialog_ok() : "OK";
+
+    public static string Failure(DialogNavigation.JumpFailure failure) => failure switch
+    {
+        DialogNavigation.JumpFailure.ElevatedTarget => JumpElevatedTarget(),
+        DialogNavigation.JumpFailure.DialogNotFound => JumpDialogNotFound(),
+        DialogNavigation.JumpFailure.FolderPickerWithFile => JumpFolderPickerWithFile(),
+        DialogNavigation.JumpFailure.ParentFolderMissing => JumpParentMissing(),
+        DialogNavigation.JumpFailure.NavigationFailed => JumpFileDialogUnavailable(),
+        DialogNavigation.JumpFailure.FileNameNotFound => JumpFileNameNotFound(),
+        DialogNavigation.JumpFailure.AddressBarFocusFailed => JumpAddressBarFailed(),
+        DialogNavigation.JumpFailure.DialogStructureChanged => JumpFileDialogUnavailable(),
+        DialogNavigation.JumpFailure.LegacyFileNameFieldMissing => JumpLegacyEditMissing(),
+        _ => JumpFileDialogUnavailable(),
+    };
 
     public static string Error(QuickJumpError? error) => error switch
     {

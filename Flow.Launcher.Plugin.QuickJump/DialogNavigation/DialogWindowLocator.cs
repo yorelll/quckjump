@@ -19,6 +19,26 @@ internal static class DialogWindowLocator
     }
 
     /// <summary>
+    /// Fallback capture used when structural qualification fails. Returns the
+    /// original foreground standard dialog and its process so an elevated
+    /// target can still produce an accurate explanation instead of silence.
+    /// </summary>
+    public static FallbackDialogCapture CaptureForegroundStandardDialog()
+    {
+        var foreground = PInvoke.GetForegroundWindow();
+        if (foreground == HWND.Null ||
+            !PInvoke.IsWindowVisible(foreground) ||
+            !string.Equals(Utils.GetClassName(foreground), "#32770", StringComparison.Ordinal))
+        {
+            return default;
+        }
+
+        uint processId;
+        _ = PInvoke.GetWindowThreadProcessId(foreground, &processId);
+        return new FallbackDialogCapture(foreground, processId);
+    }
+
+    /// <summary>
     /// A generic <c>#32770</c> class is not sufficient: message boxes,
     /// properties windows, and unrelated application dialogs use it too. The
     /// candidate must expose a constrained modern address-bar path or a

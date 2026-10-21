@@ -6,8 +6,8 @@
     <AssemblyName>Flow.Launcher.Plugin.QuickJump</AssemblyName>
     <PackageId>Flow.Launcher.Plugin.QuickJump</PackageId>
     <Authors>yorelll</Authors>
-    <PackageProjectUrl>https://github.com/yorelll/quckjump</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/yorelll/quckjump</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/yorelll/quickjump</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/yorelll/quickjump</RepositoryUrl>
     <PackageTags>flow-launcher flow-plugin</PackageTags>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

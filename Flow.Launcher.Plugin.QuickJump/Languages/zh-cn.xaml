@@ -21,6 +21,11 @@
   <system:String x:Key="quickjump_jump_file_dialog_unavailable">文件对话框结构在跳转完成前发生了变化，操作已取消。</system:String>
   <system:String x:Key="quickjump_jump_filename_not_found">QuickJump 已导航到文件所在文件夹，但未找到对话框的文件名输入框，未填入文件名。</system:String>
   <system:String x:Key="quickjump_jump_parent_missing">所选文件已不存在有效的父文件夹。</system:String>
+  <system:String x:Key="quickjump_jump_address_bar_failed">无法让文件对话框的地址栏获得焦点。请尝试在设置中切换 Alt+D / Ctrl+L，或手动导航到目标位置。</system:String>
+  <system:String x:Key="quickjump_jump_legacy_edit_missing">旧版文件对话框中未找到文件名输入框，操作已取消。</system:String>
+  <system:String x:Key="quickjump_jump_dialog_not_found">未找到可用的原生文件对话框。请先打开“打开”“保存”或“选择文件夹”对话框，然后重试。</system:String>
+  <system:String x:Key="quickjump_dialog_title">QuickJump</system:String>
+  <system:String x:Key="quickjump_dialog_ok">确定</system:String>
 
   <system:String x:Key="quickjump_settings_title">QuickJump 设置</system:String>
   <system:String x:Key="quickjump_settings_custom_entries">自定义跳转</system:String>
