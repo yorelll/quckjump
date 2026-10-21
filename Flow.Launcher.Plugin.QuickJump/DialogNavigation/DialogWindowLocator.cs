@@ -37,10 +37,10 @@ internal static class DialogWindowLocator
     private static List<StandardDialogCandidate> GetVisibleStandardDialogCandidates()
     {
         var candidates = new List<StandardDialogCandidate>();
-        PInvoke.EnumWindows(EnumProc, default);
+        PInvoke.EnumWindows(EnumProc, 0);
         return candidates;
 
-        unsafe BOOL EnumProc(HWND window, LPARAM _)
+        BOOL EnumProc(HWND window, LPARAM _)
         {
             if (!PInvoke.IsWindowVisible(window) ||
                 !string.Equals(Utils.GetClassName(window), "#32770", StringComparison.Ordinal))
@@ -48,11 +48,16 @@ internal static class DialogWindowLocator
                 return true;
             }
 
-            uint processId;
-            _ = PInvoke.GetWindowThreadProcessId(window, &processId);
-            candidates.Add(new StandardDialogCandidate(window, processId));
+            candidates.Add(new StandardDialogCandidate(window, GetProcessId(window)));
             return true;
         }
+    }
+
+    private static unsafe uint GetProcessId(HWND window)
+    {
+        uint processId;
+        _ = PInvoke.GetWindowThreadProcessId(window, &processId);
+        return processId;
     }
 
     /// <summary>
