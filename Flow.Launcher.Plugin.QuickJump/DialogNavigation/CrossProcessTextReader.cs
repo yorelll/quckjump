@@ -40,6 +40,8 @@ internal static class CrossProcessTextReader
         var buffer = new char[MaximumTextLength];
         fixed (char* pointer = buffer)
         {
+            // CsWin32 generates the result parameter as an optional pointer;
+            // it is not needed for the bounded WM_GETTEXT read.
             nint sent = PInvoke.SendMessageTimeout(
                 handle,
                 PInvoke.WM_GETTEXT,
@@ -47,7 +49,7 @@ internal static class CrossProcessTextReader
                 (LPARAM)(nint)pointer,
                 SEND_MESSAGE_TIMEOUT_FLAGS.SMTO_ABORTIFHUNG | SEND_MESSAGE_TIMEOUT_FLAGS.SMTO_BLOCK,
                 TimeoutMilliseconds,
-                out _).Value;
+                null).Value;
             if (sent == 0)
             {
                 return false;
