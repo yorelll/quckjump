@@ -70,7 +70,7 @@ public sealed class CustomEntryRepositoryTests : IDisposable
 
         Assert.True(repository.TryAdd("Shared", first, CustomEntryType.File, true, out _));
         Assert.False(repository.TryAdd("shared", second, CustomEntryType.File, true, out var error));
-        Assert.Equal(Localization.QuickJumpErrorCode.AliasExists, error!.Code);
+        Assert.Equal(Flow.Launcher.Plugin.QuickJump.Localization.QuickJumpErrorCode.AliasExists, error!.Code);
     }
 
     [Fact]
