@@ -9,43 +9,65 @@ public sealed class FileDialogStructureTests
     [Fact]
     public void StructureClassification_RequiresConstrainedFileDialogEvidence()
     {
-        Assert.Equal(FileDialogKind.Modern, Classify("#32770", modernPaths: 1, legacyPaths: 0, hasStandardConfirmButton: false));
-        Assert.Equal(FileDialogKind.Legacy, Classify("#32770", modernPaths: 0, legacyPaths: 1, hasStandardConfirmButton: true));
-        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 0, legacyPaths: 1, hasStandardConfirmButton: false));
-        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 0, legacyPaths: 0, hasStandardConfirmButton: true));
-        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 2, legacyPaths: 0, hasStandardConfirmButton: true));
-        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 0, legacyPaths: 2, hasStandardConfirmButton: true));
-        Assert.Equal(FileDialogKind.None, Classify("ApplicationDialog", modernPaths: 1, legacyPaths: 0, hasStandardConfirmButton: true));
+        Assert.Equal(FileDialogKind.Modern, Classify("#32770", modernPaths: 1, fileNamePaths: 0, hasStandardConfirmButton: false));
+        Assert.Equal(FileDialogKind.Legacy, Classify("#32770", modernPaths: 0, fileNamePaths: 1, hasStandardConfirmButton: true));
+        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 0, fileNamePaths: 1, hasStandardConfirmButton: false));
+        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 0, fileNamePaths: 0, hasStandardConfirmButton: true));
+        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 2, fileNamePaths: 0, hasStandardConfirmButton: true));
+        Assert.Equal(FileDialogKind.None, Classify("#32770", modernPaths: 0, fileNamePaths: 2, hasStandardConfirmButton: true));
+        Assert.Equal(FileDialogKind.None, Classify("ApplicationDialog", modernPaths: 1, fileNamePaths: 0, hasStandardConfirmButton: true));
     }
 
-    private static FileDialogKind Classify(string windowClass, int modernPaths, int legacyPaths, bool hasStandardConfirmButton) =>
-        new FileDialogStructure(windowClass, modernPaths, legacyPaths, hasStandardConfirmButton).Classify();
-
     [Fact]
-    public void JumpPlan_LegacyFolderUsesLegacyRouteWithTwoConfirmStrategy()
+    public void PurposeClassification_DistinguishesFilenameControlFromFolderOnlyDialog()
     {
         Assert.Equal(
-            FileDialogJumpRoute.LegacyFolder,
-            FileDialogJumpPlan.Select(FileDialogKind.Legacy, CustomEntryType.Folder));
+            FileDialogPurpose.FilePicker,
+            new FileDialogStructure("#32770", 1, 1, true).ClassifyPurpose());
+        Assert.Equal(
+            FileDialogPurpose.FolderPicker,
+            new FileDialogStructure("#32770", 1, 0, true).ClassifyPurpose());
+        Assert.Equal(
+            FileDialogPurpose.Unknown,
+            new FileDialogStructure("#32770", 0, 1, true).ClassifyPurpose());
     }
 
     [Fact]
-    public void JumpPlan_LegacyFileUsesLegacyRouteWithSingleConfirmStrategy()
+    public void JumpPlan_FileEntryInFolderPickerIsRejectedInsteadOfInjectingInput()
+    {
+        Assert.Equal(
+            FileDialogJumpRoute.ModernFolderPickerFile,
+            FileDialogJumpPlan.Select(FileDialogKind.Modern, FileDialogPurpose.FolderPicker, CustomEntryType.File));
+    }
+
+    [Fact]
+    public void JumpPlan_FileEntryInFilePickerNavigatesToParentThenFillsName()
+    {
+        Assert.Equal(
+            FileDialogJumpRoute.ModernFilePickerFile,
+            FileDialogJumpPlan.Select(FileDialogKind.Modern, FileDialogPurpose.FilePicker, CustomEntryType.File));
+    }
+
+    [Fact]
+    public void JumpPlan_FolderEntryStillNavigatesInBothModernPickerKinds()
+    {
+        Assert.Equal(
+            FileDialogJumpRoute.ModernFolder,
+            FileDialogJumpPlan.Select(FileDialogKind.Modern, FileDialogPurpose.FilePicker, CustomEntryType.Folder));
+        Assert.Equal(
+            FileDialogJumpRoute.ModernFolder,
+            FileDialogJumpPlan.Select(FileDialogKind.Modern, FileDialogPurpose.FolderPicker, CustomEntryType.Folder));
+    }
+
+    [Fact]
+    public void JumpPlan_LegacyFileUsesSingleConfirmAndLegacyFolderUsesTwoConfirms()
     {
         Assert.Equal(
             FileDialogJumpRoute.LegacyFile,
-            FileDialogJumpPlan.Select(FileDialogKind.Legacy, CustomEntryType.File));
-    }
-
-    [Fact]
-    public void JumpPlan_LegacyStructureCannotEnterModernAddressPath()
-    {
-        Assert.NotEqual(
-            FileDialogJumpRoute.ModernFolder,
-            FileDialogJumpPlan.Select(FileDialogKind.Legacy, CustomEntryType.Folder));
-        Assert.NotEqual(
-            FileDialogJumpRoute.ModernFile,
-            FileDialogJumpPlan.Select(FileDialogKind.Legacy, CustomEntryType.File));
+            FileDialogJumpPlan.Select(FileDialogKind.Legacy, FileDialogPurpose.Unknown, CustomEntryType.File));
+        Assert.Equal(
+            FileDialogJumpRoute.LegacyFolder,
+            FileDialogJumpPlan.Select(FileDialogKind.Legacy, FileDialogPurpose.Unknown, CustomEntryType.Folder));
     }
 
     [Fact]
@@ -83,4 +105,7 @@ public sealed class FileDialogStructureTests
 
         Assert.Equal(-1, FileDialogCandidateSelection.SelectSingleEligible(candidates));
     }
+
+    private static FileDialogKind Classify(string windowClass, int modernPaths, int fileNamePaths, bool hasStandardConfirmButton) =>
+        new FileDialogStructure(windowClass, modernPaths, fileNamePaths, hasStandardConfirmButton).Classify();
 }

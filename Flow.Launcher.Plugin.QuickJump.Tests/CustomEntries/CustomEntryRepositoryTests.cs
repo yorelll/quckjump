@@ -24,19 +24,53 @@ public sealed class CustomEntryRepositoryTests : IDisposable
         Assert.Single(repository.GetAll());
         Assert.Equal(1, saves);
 
-        Assert.True(repository.TryUpdate("report", "documents", folder, CustomEntryType.Folder, false, out var updateError), updateError is null ? null : updateError.Code.ToString());
+        Assert.True(repository.TryUpdate("report", CustomEntryType.File, "documents", folder, CustomEntryType.Folder, false, out var updateError), updateError is null ? null : updateError.Code.ToString());
         Assert.Equal("documents", repository.GetAll().Single().Alias);
         Assert.Equal(CustomEntryType.Folder, repository.GetAll().Single().Type);
         Assert.False(repository.GetAll().Single().Enabled);
         Assert.Equal(2, saves);
 
-        Assert.True(repository.TrySetEnabled("documents", true, out var toggleError), toggleError is null ? null : toggleError.Code.ToString());
+        Assert.True(repository.TrySetEnabled("documents", CustomEntryType.Folder, true, out var toggleError), toggleError is null ? null : toggleError.Code.ToString());
         Assert.True(repository.GetAll().Single().Enabled);
         Assert.Equal(3, saves);
 
-        Assert.True(repository.Remove("DOCUMENTS"));
+        Assert.True(repository.Remove("DOCUMENTS", CustomEntryType.Folder));
         Assert.Empty(repository.GetAll());
         Assert.Equal(4, saves);
+    }
+
+    [Fact]
+    public void TypeSpecificMutations_OperateOnlyOnTheIntendedSameAliasEntry()
+    {
+        var settings = new Flow.Launcher.Plugin.QuickJump.Settings.Settings();
+        int saves = 0;
+        var repository = new CustomEntryRepository(settings, () => saves++);
+        var file = CreateFile("output.txt");
+        var folder = CreateDirectory("output");
+
+        Assert.True(repository.TryAdd("output", file, CustomEntryType.File, true, out _));
+        Assert.True(repository.TryAdd("output", folder, CustomEntryType.Folder, true, out var duplicateError), duplicateError?.Code.ToString());
+        Assert.Equal(2, repository.GetAll().Count);
+
+        Assert.True(repository.TrySetEnabled("output", CustomEntryType.File, false, out _));
+        Assert.False(repository.Find("output", CustomEntryType.File)!.Enabled);
+        Assert.True(repository.Find("output", CustomEntryType.Folder)!.Enabled);
+
+        Assert.True(repository.Remove("output", CustomEntryType.File));
+        Assert.Single(repository.GetAll());
+        Assert.Equal(CustomEntryType.Folder, repository.GetAll().Single().Type);
+    }
+
+    [Fact]
+    public void Add_RejectsSameAliasAndTypeCaseInsensitively()
+    {
+        var repository = new CustomEntryRepository(new Flow.Launcher.Plugin.QuickJump.Settings.Settings(), () => { });
+        var first = CreateFile("one.txt");
+        var second = CreateFile("two.txt");
+
+        Assert.True(repository.TryAdd("Shared", first, CustomEntryType.File, true, out _));
+        Assert.False(repository.TryAdd("shared", second, CustomEntryType.File, true, out var error));
+        Assert.Equal(Localization.QuickJumpErrorCode.AliasExists, error!.Code);
     }
 
     [Fact]

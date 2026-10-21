@@ -16,6 +16,11 @@
   <system:String x:Key="quickjump_context_add_custom_subtitle">创建一个持久化的文件或文件夹快捷方式</system:String>
   <system:String x:Key="quickjump_add_existing_only">只有现有文件或文件夹可以添加到自定义跳转。</system:String>
   <system:String x:Key="quickjump_add_success">已添加到自定义跳转。</system:String>
+  <system:String x:Key="quickjump_jump_elevated_target">目标程序以管理员权限运行，QuickJump 无法向其发送键盘输入。请以相同权限运行 Flow Launcher，或不以管理员身份启动该程序。</system:String>
+  <system:String x:Key="quickjump_jump_folder_picker_with_file">当前对话框用于选择文件夹，但所选自定义条目是文件。请为这个对话框选择文件夹条目。</system:String>
+  <system:String x:Key="quickjump_jump_file_dialog_unavailable">文件对话框结构在跳转完成前发生了变化，操作已取消。</system:String>
+  <system:String x:Key="quickjump_jump_filename_not_found">QuickJump 已导航到文件所在文件夹，但未找到对话框的文件名输入框，未填入文件名。</system:String>
+  <system:String x:Key="quickjump_jump_parent_missing">所选文件已不存在有效的父文件夹。</system:String>
 
   <system:String x:Key="quickjump_settings_title">QuickJump 设置</system:String>
   <system:String x:Key="quickjump_settings_custom_entries">自定义跳转</system:String>

@@ -16,6 +16,11 @@
   <system:String x:Key="quickjump_context_add_custom_subtitle">Create a persistent file or folder shortcut</system:String>
   <system:String x:Key="quickjump_add_existing_only">Only an existing file or folder can be added to custom entries.</system:String>
   <system:String x:Key="quickjump_add_success">Added to custom entries.</system:String>
+  <system:String x:Key="quickjump_jump_elevated_target">The target application is running as administrator, so QuickJump cannot send it keyboard input. Run Flow Launcher with the same privileges, or start that application without administrator rights.</system:String>
+  <system:String x:Key="quickjump_jump_folder_picker_with_file">The active dialog selects folders, but the selected custom entry is a file. Choose a folder entry for this dialog.</system:String>
+  <system:String x:Key="quickjump_jump_file_dialog_unavailable">The file dialog structure changed before QuickJump could complete the jump. The action was cancelled.</system:String>
+  <system:String x:Key="quickjump_jump_filename_not_found">QuickJump navigated to the file's folder but could not find the dialog's filename field. The file name was not filled in.</system:String>
+  <system:String x:Key="quickjump_jump_parent_missing">The selected file no longer has a valid parent folder.</system:String>
 
   <system:String x:Key="quickjump_settings_title">QuickJump settings</system:String>
   <system:String x:Key="quickjump_settings_custom_entries">Custom entries</system:String>

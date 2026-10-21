@@ -6,9 +6,9 @@ namespace Flow.Launcher.Plugin.QuickJump.Tests.Settings;
 public sealed class CustomEntryDialogPresentationPlanTests
 {
     [Fact]
-    public void Create_VisibleEnabledOwnerUsesOwnerWithoutTopmost()
+    public void Create_UsableUnrelatedOwnerUsesOwnerWithoutTopmost()
     {
-        var plan = CustomEntryDialogPresentationPlan.Create(ownerIsVisibleAndEnabled: true);
+        var plan = CustomEntryDialogPresentationPlan.Create(hasUsableUnrelatedOwner: true);
 
         Assert.True(plan.UseOwner);
         Assert.False(plan.CenterOnPrimaryScreen);
@@ -17,9 +17,9 @@ public sealed class CustomEntryDialogPresentationPlanTests
     }
 
     [Fact]
-    public void Create_HiddenOrDisabledOwnerUsesSafeCenteredTemporaryTopmostWindow()
+    public void Create_NoUsableUnrelatedOwnerUsesTopLevelCenteredTemporaryTopmostWindow()
     {
-        var plan = CustomEntryDialogPresentationPlan.Create(ownerIsVisibleAndEnabled: false);
+        var plan = CustomEntryDialogPresentationPlan.Create(hasUsableUnrelatedOwner: false);
 
         Assert.False(plan.UseOwner);
         Assert.True(plan.CenterOnPrimaryScreen);

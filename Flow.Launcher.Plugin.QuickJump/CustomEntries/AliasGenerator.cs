@@ -57,7 +57,10 @@ internal static class AliasGenerator
             candidate = QuickJumpText.AliasFallback();
         }
 
+        // Alias uniqueness is per type: an existing file alias does not force a
+        // suffix on a new folder alias (and vice versa).
         var aliases = existingEntries
+            .Where(entry => entry.Type == type)
             .Select(entry => entry.Alias)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (!aliases.Contains(candidate))

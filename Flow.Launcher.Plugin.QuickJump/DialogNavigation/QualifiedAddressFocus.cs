@@ -4,7 +4,6 @@ using FlaUI.UIA3;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.WindowsAndMessaging;
-using Flow.Launcher.Plugin.QuickJump.Diagnostics;
 
 namespace Flow.Launcher.Plugin.QuickJump.DialogNavigation;
 
@@ -22,43 +21,34 @@ internal static class QualifiedAddressFocus
         uint currentThread = PInvoke.GetCurrentThreadId();
         if (dialogHandle == HWND.Null || addressEdit == HWND.Null || targetThread == 0 || currentThread == 0)
         {
-            QuickJumpDiagnostics.Warn($"qualified-focus abort=unqualified targetThread={targetThread} currentThread={currentThread}");
             return false;
         }
 
-        bool queueCreated = EnsureCurrentThreadMessageQueue();
-        QuickJumpDiagnostics.Info($"qualified-focus queueCreated={queueCreated} targetThread={targetThread} targetProcess={targetProcessId} currentThread={currentThread}");
-
+        _ = EnsureCurrentThreadMessageQueue();
         bool attached = false;
         bool attachVerified = false;
         try
         {
             attached = targetThread == currentThread || PInvoke.AttachThreadInput(currentThread, targetThread, true);
-            NativeEvidenceCollector.LogImmediateLastError("AttachThreadInput");
-            QuickJumpDiagnostics.Info($"qualified-focus attachSucceeded={attached}");
             if (attached)
             {
-                var previousFocus = PInvoke.SetFocus(addressEdit);
-                NativeEvidenceCollector.LogImmediateLastError("SetFocus");
+                _ = PInvoke.SetFocus(addressEdit);
                 attachVerified = GetDialogFocusedWindow(dialogHandle) == addressEdit;
-                QuickJumpDiagnostics.Info($"qualified-focus setFocusPrevious={previousFocus} attachVerified={attachVerified}");
                 if (attachVerified)
                 {
                     return true;
                 }
             }
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            QuickJumpDiagnostics.Exception("qualified-focus attach", exception);
+            // Fall through to the verified UIA path only.
         }
         finally
         {
             if (attached && targetThread != currentThread)
             {
-                bool detached = PInvoke.AttachThreadInput(currentThread, targetThread, false);
-                NativeEvidenceCollector.LogImmediateLastError("AttachThreadInputDetach");
-                QuickJumpDiagnostics.Info($"qualified-focus detachSucceeded={detached}");
+                _ = PInvoke.AttachThreadInput(currentThread, targetThread, false);
             }
         }
 
@@ -68,7 +58,6 @@ internal static class QualifiedAddressFocus
             attachSucceeded: attached,
             attachFocusVerified: attachVerified,
             uiaFocusVerified: uiaVerified);
-        QuickJumpDiagnostics.Info($"qualified-focus finalPath={path}");
         return path is QualifiedAddressFocusPath.AttachSetFocus or QualifiedAddressFocusPath.UiaFocusFallback;
     }
 
@@ -78,7 +67,6 @@ internal static class QualifiedAddressFocus
         // PM_NOREMOVE creates this worker thread's queue without consuming an
         // input message, satisfying AttachThreadInput's documented precondition.
         _ = PInvoke.PeekMessage(&message, HWND.Null, 0, 0, PEEK_MESSAGE_REMOVE_TYPE.PM_NOREMOVE);
-        NativeEvidenceCollector.LogImmediateLastError("PeekMessage");
         return true;
     }
 
@@ -89,13 +77,10 @@ internal static class QualifiedAddressFocus
             using var automation = new UIA3Automation();
             var element = automation.FromHandle(addressEdit);
             element.Focus();
-            bool verified = GetDialogFocusedWindow(dialogHandle) == addressEdit;
-            QuickJumpDiagnostics.Info($"qualified-focus uiaFocusVerified={verified}");
-            return verified;
+            return GetDialogFocusedWindow(dialogHandle) == addressEdit;
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            QuickJumpDiagnostics.Exception("qualified-focus uia", exception);
             return false;
         }
     }

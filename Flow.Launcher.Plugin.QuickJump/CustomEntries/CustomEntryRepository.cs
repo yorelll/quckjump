@@ -41,10 +41,17 @@ internal sealed class CustomEntryRepository
         return true;
     }
 
-    public bool TryUpdate(string originalAlias, string alias, string path, CustomEntryType type, bool enabled, out QuickJumpError? error)
+    /// <summary>Update keyed by the original alias and type so file/folder aliases may coexist.</summary>
+    public bool TryUpdate(
+        string originalAlias,
+        CustomEntryType originalType,
+        string alias,
+        string path,
+        CustomEntryType type,
+        bool enabled,
+        out QuickJumpError? error)
     {
-        var existing = _settings.CustomEntries.FirstOrDefault(entry =>
-            string.Equals(entry.Alias, originalAlias, StringComparison.OrdinalIgnoreCase));
+        var existing = Find(originalAlias, originalType);
         if (existing is null)
         {
             error = new QuickJumpError(QuickJumpErrorCode.EntryMissing, originalAlias);
@@ -58,7 +65,7 @@ internal sealed class CustomEntryRepository
             Type = type,
             Enabled = enabled,
         };
-        error = CustomEntryValidator.Validate(proposed, _settings.CustomEntries, originalAlias);
+        error = CustomEntryValidator.Validate(proposed, _settings.CustomEntries, originalAlias, originalType);
         if (error is not null)
         {
             return false;
@@ -72,10 +79,9 @@ internal sealed class CustomEntryRepository
         return true;
     }
 
-    public bool Remove(string alias)
+    public bool Remove(string alias, CustomEntryType type)
     {
-        var entry = _settings.CustomEntries.FirstOrDefault(item =>
-            string.Equals(item.Alias, alias, StringComparison.OrdinalIgnoreCase));
+        var entry = Find(alias, type);
         if (entry is null)
         {
             return false;
@@ -86,10 +92,9 @@ internal sealed class CustomEntryRepository
         return true;
     }
 
-    public bool TrySetEnabled(string alias, bool enabled, out QuickJumpError? error)
+    public bool TrySetEnabled(string alias, CustomEntryType type, bool enabled, out QuickJumpError? error)
     {
-        var entry = _settings.CustomEntries.FirstOrDefault(item =>
-            string.Equals(item.Alias, alias, StringComparison.OrdinalIgnoreCase));
+        var entry = Find(alias, type);
         if (entry is null)
         {
             error = new QuickJumpError(QuickJumpErrorCode.EntryMissing, alias);
@@ -105,4 +110,9 @@ internal sealed class CustomEntryRepository
         error = null;
         return true;
     }
+
+    public CustomEntry? Find(string alias, CustomEntryType type) =>
+        _settings.CustomEntries.FirstOrDefault(entry =>
+            entry.Type == type &&
+            string.Equals(entry.Alias, alias, StringComparison.OrdinalIgnoreCase));
 }

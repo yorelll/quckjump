@@ -30,7 +30,7 @@ public sealed class CustomEntryValidatorTests
     }
 
     [Fact]
-    public void Validate_RejectsCaseInsensitiveDuplicateAliasBeforeMutation()
+    public void Validate_RejectsCaseInsensitiveDuplicateAliasOfTheSameType()
     {
         var temporaryFile = Path.GetTempFileName();
         try
@@ -40,6 +40,40 @@ public sealed class CustomEntryValidatorTests
             Assert.Equal(QuickJumpErrorCode.AliasExists, CustomEntryValidator.Validate(entry, existing)!.Code);
         }
         finally { File.Delete(temporaryFile); }
+    }
+
+    [Fact]
+    public void Validate_AllowsSameAliasForFileAndFolderEntries()
+    {
+        var file = Path.GetTempFileName();
+        var folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var proposed = new CustomEntry { Alias = "output", Path = folder, Type = CustomEntryType.Folder };
+            var existing = new[] { new CustomEntry { Alias = "output", Path = file, Type = CustomEntryType.File } };
+
+            Assert.Null(CustomEntryValidator.Validate(proposed, existing));
+        }
+        finally
+        {
+            File.Delete(file);
+            Directory.Delete(folder);
+        }
+    }
+
+    [Fact]
+    public void Validate_EditingKeepsSameEntryFromBeingItsOwnDuplicate()
+    {
+        var file = Path.GetTempFileName();
+        try
+        {
+            var proposed = new CustomEntry { Alias = "OUTPUT", Path = file, Type = CustomEntryType.File };
+            var existing = new[] { new CustomEntry { Alias = "output", Path = file, Type = CustomEntryType.File } };
+
+            Assert.Null(CustomEntryValidator.Validate(proposed, existing, originalAlias: "output", originalType: CustomEntryType.File));
+        }
+        finally { File.Delete(file); }
     }
 
     [Fact]

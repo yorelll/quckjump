@@ -13,6 +13,7 @@ internal sealed class CustomEntryEditorDialog : Window, ILocalizedControl
 {
     private readonly CustomEntryRepository _repository;
     private readonly string? _originalAlias;
+    private readonly CustomEntryType? _originalType;
     private readonly TextBox _alias;
     private readonly TextBox _path;
     private readonly TextBlock _detectedType;
@@ -24,6 +25,7 @@ internal sealed class CustomEntryEditorDialog : Window, ILocalizedControl
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _originalAlias = existing?.Alias;
+        _originalType = existing?.Type;
         string currentPath = existing?.Path ?? initialPath ?? string.Empty;
         var initialType = existing?.Type ?? DetectExistingType(currentPath);
         string defaultAlias = existing?.Alias ?? CreateInitialAlias(currentPath, initialType);
@@ -152,9 +154,9 @@ internal sealed class CustomEntryEditorDialog : Window, ILocalizedControl
             _error.Text = QuickJumpText.Error(typeError);
             return;
         }
-        bool success = _originalAlias is null
+        bool success = _originalAlias is null || _originalType is null
             ? _repository.TryAdd(_alias.Text, _path.Text, type, _enabled.IsChecked == true, out var error)
-            : _repository.TryUpdate(_originalAlias, _alias.Text, _path.Text, type, _enabled.IsChecked == true, out error);
+            : _repository.TryUpdate(_originalAlias, _originalType.Value, _alias.Text, _path.Text, type, _enabled.IsChecked == true, out error);
         if (!success)
         {
             _error.Text = QuickJumpText.Error(error);
@@ -167,7 +169,7 @@ internal sealed class CustomEntryEditorDialog : Window, ILocalizedControl
             {
                 Close();
             }
-            else if (IsVisible)
+            else
             {
                 DialogResult = true;
             }

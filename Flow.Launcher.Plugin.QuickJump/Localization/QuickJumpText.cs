@@ -33,6 +33,11 @@ internal static class QuickJumpText
     public static string ChooseFileTitle() => IsInitialized ? Localize.quickjump_editor_choose_file_title() : "Choose a file to jump to";
     public static string ChooseFolderTitle() => IsInitialized ? Localize.quickjump_editor_choose_folder_title() : "Choose a folder to jump to";
     public static string AllFilesFilter() => IsInitialized ? Localize.quickjump_editor_all_files() : "All files|*.*";
+    public static string JumpElevatedTarget() => IsInitialized ? Localize.quickjump_jump_elevated_target() : "The target application is running as administrator, so QuickJump cannot send it keyboard input. Run Flow Launcher with the same privileges, or start that application without administrator rights.";
+    public static string JumpFolderPickerWithFile() => IsInitialized ? Localize.quickjump_jump_folder_picker_with_file() : "The active dialog selects folders, but the selected custom entry is a file. Choose a folder entry for this dialog.";
+    public static string JumpFileDialogUnavailable() => IsInitialized ? Localize.quickjump_jump_file_dialog_unavailable() : "The file dialog structure changed before QuickJump could complete the jump. The action was cancelled.";
+    public static string JumpFileNameNotFound() => IsInitialized ? Localize.quickjump_jump_filename_not_found() : "QuickJump navigated to the file's folder but could not find the dialog's filename field. The file name was not filled in.";
+    public static string JumpParentMissing() => IsInitialized ? Localize.quickjump_jump_parent_missing() : "The selected file no longer has a valid parent folder.";
 
     public static string Error(QuickJumpError? error) => error switch
     {

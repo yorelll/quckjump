@@ -34,7 +34,7 @@ public sealed class LocalizationResourceTests
     {
         string manifestPath = Path.Combine(AppContext.BaseDirectory, "plugin.json");
         using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
-        Assert.Equal("1.0.1-diagnostic.8", manifest.RootElement.GetProperty("Version").GetString());
+        Assert.Equal("1.0.0", manifest.RootElement.GetProperty("Version").GetString());
         Assert.Equal("Quickly jump to files and folders in open or save dialogs.", manifest.RootElement.GetProperty("Description").GetString());
     }
 

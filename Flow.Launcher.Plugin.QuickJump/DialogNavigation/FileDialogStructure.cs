@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Flow.Launcher.Plugin.QuickJump.CustomEntries;
 
 namespace Flow.Launcher.Plugin.QuickJump.DialogNavigation;
 
@@ -9,6 +10,14 @@ internal enum FileDialogKind
     None,
     Modern,
     Legacy,
+}
+
+/// <summary>Distinguishes a native file picker from a folder picker by standard control structure.</summary>
+internal enum FileDialogPurpose
+{
+    Unknown,
+    FilePicker,
+    FolderPicker,
 }
 
 /// <summary>
@@ -47,28 +56,48 @@ internal sealed record FileDialogStructure(
             ? FileDialogKind.Legacy
             : FileDialogKind.None;
     }
+
+    /// <summary>
+    /// Modern file pickers expose a filename combo/edit outside Address Band
+    /// Root; folder pickers expose the address band only. The distinction is
+    /// used to avoid writing a filename into a folder picker.
+    /// </summary>
+    public FileDialogPurpose ClassifyPurpose()
+    {
+        if (Classify() != FileDialogKind.Modern)
+        {
+            return FileDialogPurpose.Unknown;
+        }
+
+        return LegacyFileNamePathCount >= 1
+            ? FileDialogPurpose.FilePicker
+            : FileDialogPurpose.FolderPicker;
+    }
 }
 
 /// <summary>Selects the appropriate path-fill strategy after a dialog has been structurally verified.</summary>
 internal enum FileDialogJumpRoute
 {
     None,
-    ModernFile,
     ModernFolder,
+    ModernFilePickerFile,
+    ModernFolderPickerFile,
     LegacyFile,
     LegacyFolder,
 }
 
-/// <summary>Pure routing rule that keeps a legacy filename control out of the modern address-bar path.</summary>
+/// <summary>Pure routing rule that keeps filename controls out of the address-bar path and vice versa.</summary>
 internal static class FileDialogJumpPlan
 {
-    public static FileDialogJumpRoute Select(FileDialogKind dialogKind, CustomEntries.CustomEntryType entryType) =>
-        (dialogKind, entryType) switch
+    public static FileDialogJumpRoute Select(FileDialogKind dialogKind, FileDialogPurpose purpose, CustomEntryType entryType) =>
+        (dialogKind, purpose, entryType) switch
         {
-            (FileDialogKind.Modern, CustomEntries.CustomEntryType.File) => FileDialogJumpRoute.ModernFile,
-            (FileDialogKind.Modern, CustomEntries.CustomEntryType.Folder) => FileDialogJumpRoute.ModernFolder,
-            (FileDialogKind.Legacy, CustomEntries.CustomEntryType.File) => FileDialogJumpRoute.LegacyFile,
-            (FileDialogKind.Legacy, CustomEntries.CustomEntryType.Folder) => FileDialogJumpRoute.LegacyFolder,
+            (FileDialogKind.Modern, FileDialogPurpose.FolderPicker, CustomEntryType.Folder) => FileDialogJumpRoute.ModernFolder,
+            (FileDialogKind.Modern, FileDialogPurpose.FilePicker, CustomEntryType.Folder) => FileDialogJumpRoute.ModernFolder,
+            (FileDialogKind.Modern, FileDialogPurpose.FilePicker, CustomEntryType.File) => FileDialogJumpRoute.ModernFilePickerFile,
+            (FileDialogKind.Modern, FileDialogPurpose.FolderPicker, CustomEntryType.File) => FileDialogJumpRoute.ModernFolderPickerFile,
+            (FileDialogKind.Legacy, _, CustomEntryType.File) => FileDialogJumpRoute.LegacyFile,
+            (FileDialogKind.Legacy, _, CustomEntryType.Folder) => FileDialogJumpRoute.LegacyFolder,
             _ => FileDialogJumpRoute.None,
         };
 }

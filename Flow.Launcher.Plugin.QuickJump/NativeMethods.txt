@@ -23,16 +23,9 @@ AttachThreadInput
 SetFocus
 PeekMessage
 PM_NOREMOVE
-GetProcessId
-ProcessIdToSessionId
-GetThreadDesktop
-USER_OBJECT_INFORMATION_INDEX
-IsWindowEnabled
-ES_READONLY
 OpenProcessToken
 GetTokenInformation
 TokenIntegrityLevel
 TOKEN_QUERY
-GetCurrentThread
 GetWindowText
 GetWindowTextLength

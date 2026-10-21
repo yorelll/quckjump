@@ -13,7 +13,6 @@ using Windows.Win32.Foundation;
 using Windows.Win32.UI.WindowsAndMessaging;
 using Flow.Launcher.Plugin.QuickJump.CustomEntries;
 using Flow.Launcher.Plugin.QuickJump.DialogNavigation;
-using Flow.Launcher.Plugin.QuickJump.Diagnostics;
 using Flow.Launcher.Plugin.QuickJump.FileManager;
 using Flow.Launcher.Plugin.QuickJump.Localization;
 using Flow.Launcher.Plugin.QuickJump.Settings;
@@ -37,7 +36,6 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         _context = Context;
         _settings = Context.API.LoadSettingJsonStorage<Settings.Settings>();
         _customEntries = new CustomEntryRepository(_settings, () => Context.API.SaveSettingJsonStorage<Settings.Settings>());
-        QuickJumpDiagnostics.Initialize(Context, "1.0.1-diagnostic.8");
     }
 
     public string GetTranslatedPluginTitle() => QuickJumpText.PluginName();
@@ -59,9 +57,8 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         }
 
         // Flow 取得焦点后，原生文件对话框通常仍可见但不在前台。尽早缓存其
-        // HWND，后续操作不再仅依赖“当前前台窗口”，从而兼容 VS Code 等宿主。
+        // HWND，后续操作不再仅依赖“当前前台窗口”。
         var capturedDialog = DialogWindowLocator.CaptureVisibleFileDialog();
-        QuickJumpDiagnostics.Info($"query capturedDialog={(capturedDialog == HWND.Null ? "none" : "eligible")}");
         var parsedQuery = QuickJumpQuery.Parse(query.Search);
         var results = _searchService.Search(
             parsedQuery,
@@ -175,9 +172,9 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             return false;
         }
 
-        // Context menus can be invoked while Flow owns a hidden or disabled
-        // window. The presenter creates and shows the dialog via WPF's UI
-        // dispatcher and avoids assigning such an invalid owner.
+        // The context editor is a top-level, unowned modeless window. It is
+        // scheduled on Flow's UI dispatcher, so it appears immediately even
+        // after Flow hides its search window.
         _customEntryDialogPresenter.ShowForPath(_customEntries, path, () =>
             _context?.API.ShowMsg(QuickJumpText.AddSuccess()));
         return false;
@@ -185,29 +182,45 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
 
     private bool JumpAction(string path, CustomEntryType type, HWND capturedDialog)
     {
-        _context?.API.LogInfo(LogTag, $"准备跳转到 {path}");
-        QuickJumpDiagnostics.Info($"jump action path={path} type={type} captured={(capturedDialog == HWND.Null ? "none" : "present")}");
         var thread = new Thread(() =>
         {
+            // UIPI must be checked before touching the dialog at all. An
+            // elevated target may also refuse foreground activation, so this
+            // check must not wait for readiness first.
+            if (capturedDialog != HWND.Null && IsElevatedTarget(capturedDialog))
+            {
+                NotifyAndRestore(QuickJumpText.JumpElevatedTarget());
+                return;
+            }
+
             var dialogHandle = DialogWindowLocator.WaitForReadyTarget(
                 capturedDialog,
                 isFlowForeground: IsFlowForeground);
             if (dialogHandle == HWND.Null)
             {
-                _context?.API.LogWarn(LogTag, "原生文件对话框未在有界重试内成为前台窗口；为避免向 Flow 注入快捷键，已取消跳转。");
+                LogWarn("原生文件对话框未在有界重试内成为前台窗口，已取消跳转。");
+                return;
+            }
+
+            if (IsElevatedTarget(dialogHandle))
+            {
+                NotifyAndRestore(QuickJumpText.JumpElevatedTarget());
                 return;
             }
 
             var dialogKind = DialogWindowLocator.GetFileDialogKind(dialogHandle);
-            var route = FileDialogJumpPlan.Select(dialogKind, type);
-            QuickJumpDiagnostics.Info($"jump route kind={dialogKind} entryType={type} route={route}");
+            var purpose = DialogWindowLocator.GetFileDialogPurpose(dialogHandle);
+            var route = FileDialogJumpPlan.Select(dialogKind, purpose, type);
             switch (route)
             {
-                case FileDialogJumpRoute.ModernFile:
-                    ModernFileJump(path, dialogHandle);
-                    break;
                 case FileDialogJumpRoute.ModernFolder:
                     ModernFolderJump(path, dialogHandle);
+                    break;
+                case FileDialogJumpRoute.ModernFilePickerFile:
+                    ModernFilePickerFileJump(path, dialogHandle);
+                    break;
+                case FileDialogJumpRoute.ModernFolderPickerFile:
+                    NotifyAndRestore(QuickJumpText.JumpFolderPickerWithFile());
                     break;
                 case FileDialogJumpRoute.LegacyFile:
                     FileJumpOnLegacyDialog(path, dialogHandle);
@@ -216,7 +229,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
                     FolderJumpOnLegacyDialog(path, dialogHandle);
                     break;
                 default:
-                    _context?.API.LogWarn(LogTag, "已验证的原生文件对话框结构在跳转前发生变化；已取消跳转。");
+                    LogWarn("已验证的原生文件对话框结构在跳转前发生变化，已取消跳转。");
                     break;
             }
         });
@@ -228,50 +241,113 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
 
     private bool IsFlowForeground() => _context?.API.IsMainWindowVisible() == true;
 
+    /// <summary>
+    /// UIPI prevents a medium-integrity Flow Launcher from injecting input into
+    /// an elevated target. Access denied while reading the target token is
+    /// treated as likely elevated.
+    /// </summary>
+    private static bool IsElevatedTarget(HWND dialogHandle)
+    {
+        uint processId;
+        _ = PInvoke.GetWindowThreadProcessId(dialogHandle, &processId);
+        var decision = UipiPlan.Decide(ProcessIntegrityReader.GetCurrent(), ProcessIntegrityReader.Get(processId));
+        return decision == UipiDecision.BlockElevatedTarget;
+    }
+
     private void ModernFolderJump(string path, HWND dialogHandle)
     {
         var inputSimulator = new WindowsInput.InputSimulator();
         var editHandle = FocusAndVerifyModernAddressEdit(inputSimulator, dialogHandle);
         if (editHandle == HWND.Null)
         {
-            _context?.API.LogWarn(LogTag, "现代地址栏未在快捷键后获得焦点；已取消跳转。");
+            LogWarn("现代地址栏未在快捷键后获得焦点，已取消跳转。");
             return;
         }
 
         SetDialogText(editHandle, path);
         Thread.Sleep(ModernAddressNavigationPlan.Default.NavigationDelayMilliseconds);
-        QuickJumpDiagnostics.Info("modern folder inject key=Enter after verified address focus");
         inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
     }
 
-    private void ModernFileJump(string path, HWND dialogHandle)
+    /// <summary>
+    /// File picker + file entry: navigate to the parent folder, then fill only
+    /// the filename field. No final Enter is sent, so the shell never launches
+    /// an "open with" flow for the file itself.
+    /// </summary>
+    private void ModernFilePickerFileJump(string path, HWND dialogHandle)
     {
-        // Modern IFileDialog accepts the full file path through its verified
-        // address-bar path. Legacy filename controls are routed before this
-        // method and therefore never receive the modern one-Enter behavior.
-        var inputSimulator = new WindowsInput.InputSimulator();
-        var editHandle = FocusAndVerifyModernAddressEdit(inputSimulator, dialogHandle);
-        if (editHandle == HWND.Null)
+        string? parentFolder = FileJumpNavigationPlan.GetParentFolder(path);
+        string? fileName = FileJumpNavigationPlan.GetFileName(path);
+        if (parentFolder is null || fileName is null)
         {
-            _context?.API.LogWarn(LogTag, "现代地址栏未在快捷键后获得焦点；已取消跳转。");
+            LogWarn("所选文件没有有效的父文件夹。");
+            NotifyAndRestore(QuickJumpText.JumpParentMissing());
             return;
         }
 
-        SetDialogText(editHandle, path);
+        var inputSimulator = new WindowsInput.InputSimulator();
+        var addressEdit = FocusAndVerifyModernAddressEdit(inputSimulator, dialogHandle);
+        if (addressEdit == HWND.Null)
+        {
+            LogWarn("现代地址栏未在快捷键后获得焦点，已取消文件跳转。");
+            return;
+        }
+
+        SetDialogText(addressEdit, parentFolder);
         Thread.Sleep(ModernAddressNavigationPlan.Default.NavigationDelayMilliseconds);
-        QuickJumpDiagnostics.Info("modern file inject key=Enter after verified address focus");
         inputSimulator.Keyboard.KeyPress(WindowsInput.VirtualKeyCode.RETURN);
+
+        if (!WaitForParentNavigation(dialogHandle, parentFolder))
+        {
+            LogWarn("文件对话框未在有界重试内导航到目标父文件夹，已取消文件跳转。");
+            NotifyAndRestore(QuickJumpText.JumpFileDialogUnavailable());
+            return;
+        }
+
+        var fileEdit = WaitForFileNameEdit(dialogHandle);
+        if (fileEdit == HWND.Null)
+        {
+            LogWarn("文件对话框未提供可验证的文件名输入框，已取消文件跳转。");
+            NotifyAndRestore(QuickJumpText.JumpFileNameNotFound());
+            return;
+        }
+
+        // Deliberately no Enter: the user reviews the path and confirms manually.
+        SetDialogText(fileEdit, fileName);
+    }
+
+    private static bool WaitForParentNavigation(HWND dialogHandle, string parentFolder)
+    {
+        for (int attempt = 0; FileJumpNavigationPlan.ShouldVerify(attempt); attempt++)
+        {
+            string? address = GetWindowText(FindModernAddressEdit(dialogHandle));
+            string? title = GetWindowText(dialogHandle);
+            if (FileJumpNavigationPlan.IsNavigationVerified(parentFolder, address, title))
+            {
+                return true;
+            }
+            Thread.Sleep(FileJumpNavigationPlan.DefaultVerificationDelayMilliseconds);
+        }
+        return false;
+    }
+
+    private static HWND WaitForFileNameEdit(HWND dialogHandle)
+    {
+        for (int attempt = 0; FileJumpNavigationPlan.ShouldVerify(attempt); attempt++)
+        {
+            var editHandle = DialogWindowLocator.FindFileNameEdit(dialogHandle);
+            if (editHandle != HWND.Null && IsVisible(editHandle))
+            {
+                return editHandle;
+            }
+            Thread.Sleep(FileJumpNavigationPlan.DefaultVerificationDelayMilliseconds);
+        }
+        return HWND.Null;
     }
 
     private HWND FocusAndVerifyModernAddressEdit(WindowsInput.InputSimulator inputSimulator, HWND dialogHandle)
     {
         var plan = ModernAddressNavigationPlan.Default;
-        var initialAddressEdit = FindModernAddressEdit(dialogHandle);
-        var initialEvidence = DescribeModernAddressEdit(initialAddressEdit, dialogHandle);
-        NativeEvidenceCollector.LogDialogContext(dialogHandle, initialAddressEdit);
-        ReadOnlyEvidenceCollector.LogProcessIntegrity(GetProcessId(dialogHandle));
-        ReadOnlyEvidenceCollector.LogDesktopContext(GetThreadId(dialogHandle));
-        ReadOnlyEvidenceCollector.LogAddressUiaCapabilities(initialAddressEdit, initialEvidence.IsQualified());
         for (int attempt = 0; plan.ShouldTry(attempt); attempt++)
         {
             FocusAddressBar(inputSimulator);
@@ -293,16 +369,6 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
                 exists || focused != HWND.Null,
                 visible || IsVisible(focused),
                 selectedHasFocus || focusedIsQualified);
-            QuickJumpDiagnostics.Info($"address focus retry={attempt + 1}/{plan.FocusAttempts} dialogForeground={dialogForeground} preselected={DescribeHandle(preselectedEdit)} selectedPath={DescribePath(selectedEvidence)} focused={DescribeHandle(focused)} focusedPath={DescribePath(focusedEvidence)} selectedHasFocus={selectedHasFocus} focusedQualified={focusedIsQualified} ready={ready}");
-            if (attempt == 0)
-            {
-                GuiThreadOwnershipEvidence.Log(
-                    dialogHandle,
-                    preselectedEdit,
-                    focused,
-                    selectedEvidence.IsQualified(),
-                    selectedEvidence.IsOwnedByTargetDialog);
-            }
             if (ready)
             {
                 // The address shortcut can focus a different—but structurally
@@ -313,11 +379,10 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
 
             // Some common-dialog hosts leave focus on an ordinary Edit after
             // the shortcut. Do not use that control. Instead, once per jump,
-            // attach input queues and focus only the exact preselected address
-            // Edit whose structural proof has already been logged above.
+            // focus only the exact preselected address Edit whose structural
+            // proof is already established above.
             if (attempt == 0 && dialogForeground && selectedEvidence.IsQualified() && visible)
             {
-                QuickJumpDiagnostics.Info("address focus shortcut did not focus qualified edit; attempting controlled cross-thread focus");
                 if (QualifiedAddressFocus.TryFocus(dialogHandle, preselectedEdit))
                 {
                     return preselectedEdit;
@@ -325,7 +390,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             }
         }
 
-        QuickJumpDiagnostics.Warn("address focus abort: qualified edit never gained focus after shortcut");
+        LogWarn("地址栏控件始终未获得可验证的焦点。");
         return HWND.Null;
     }
 
@@ -349,24 +414,6 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         return classes;
     }
 
-    private static string DescribePath(ModernAddressEditEvidence evidence) =>
-        $"isEdit={evidence.IsEdit};owned={evidence.IsOwnedByTargetDialog};classes=[{string.Join(">", evidence.AncestorClasses)}];qualified={evidence.IsQualified()}";
-
-    private static string DescribeHandle(HWND handle) => handle == HWND.Null ? "none" : handle.ToString();
-
-    private static unsafe uint GetThreadId(HWND handle)
-    {
-        uint processId;
-        return PInvoke.GetWindowThreadProcessId(handle, &processId);
-    }
-
-    private static unsafe uint GetProcessId(HWND handle)
-    {
-        uint processId;
-        _ = PInvoke.GetWindowThreadProcessId(handle, &processId);
-        return processId;
-    }
-
     private static unsafe HWND GetDialogFocusedWindow(HWND dialogHandle)
     {
         uint processId;
@@ -383,16 +430,10 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             Strategy.CtrlL => () => inputSimulator.Keyboard.ModifiedKeyStroke(WindowsInput.VirtualKeyCode.LCONTROL, WindowsInput.VirtualKeyCode.VK_L),
             _ => () => throw new UnreachableException(),
         };
-        QuickJumpDiagnostics.Info($"address focus inject strategy={_settings?.Strategy} inputDispatch=HInputSimulator acceptedCount=unavailable-void-api");
         action();
     }
 
-    private static void SetDialogText(HWND editHandle, string path)
-    {
-        var result = Utils.SetWindowText(editHandle, path);
-        string currentText = GetWindowText(editHandle);
-        QuickJumpDiagnostics.Info($"set-window-text result={result} editClass={Utils.GetClassName(editHandle)} textMatches={string.Equals(currentText, path, StringComparison.Ordinal)}");
-    }
+    private static void SetDialogText(HWND editHandle, string text) => _ = Utils.SetWindowText(editHandle, text);
 
     private static unsafe string GetWindowText(HWND handle)
     {
@@ -488,7 +529,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         var editHandle = FindLegacyEdit(dialogHandle);
         if (editHandle == HWND.Null)
         {
-            _context?.API.LogWarn(LogTag, "旧版对话框中未找到文件名输入框。");
+            LogWarn("旧版对话框中未找到文件名输入框。");
             return;
         }
 
@@ -504,7 +545,7 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
         var editHandle = FindLegacyEdit(dialogHandle);
         if (editHandle == HWND.Null)
         {
-            _context?.API.LogWarn(LogTag, "旧版对话框中未找到文件名输入框。");
+            LogWarn("旧版对话框中未找到文件名输入框。");
             return;
         }
 
@@ -539,6 +580,27 @@ public class QuickJump : IPlugin, IContextMenu, ISettingProvider, IPluginI18n
             _customEntries,
             () => _context.API.SaveSettingJsonStorage<Settings.Settings>());
     }
+
+    private void NotifyAndRestore(string message)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        void ActionBody()
+        {
+            _context?.API.ShowMainWindow();
+            _context?.API.ShowMsg(message);
+        }
+
+        if (dispatcher is not null && !dispatcher.HasShutdownStarted)
+        {
+            dispatcher.BeginInvoke(ActionBody);
+        }
+        else
+        {
+            ActionBody();
+        }
+    }
+
+    private void LogWarn(string message) => _context?.API.LogWarn(LogTag, message);
 
     private sealed record QuickJumpResultContext(QuickEntryResult Entry, HWND CapturedDialog);
 }

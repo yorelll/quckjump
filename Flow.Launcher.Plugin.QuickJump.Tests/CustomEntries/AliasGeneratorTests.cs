@@ -30,14 +30,22 @@ public sealed class AliasGeneratorTests
     }
 
     [Fact]
-    public void CreateDefault_AddsCaseInsensitiveSuffixUntilUnique()
+    public void CreateDefault_AddsCaseInsensitiveSuffixUntilUniqueForSameType()
     {
         CustomEntry[] existing =
         [
-            new() { Alias = "work" },
-            new() { Alias = "WORK-1" },
+            new() { Alias = "work", Type = CustomEntryType.File },
+            new() { Alias = "WORK-1", Type = CustomEntryType.File },
         ];
 
         Assert.Equal("work-2", AliasGenerator.CreateDefault(@"C:\docs\work.txt", CustomEntryType.File, existing));
+    }
+
+    [Fact]
+    public void CreateDefault_DoesNotSuffixWhenOnlyTheOtherTypeUsesTheAlias()
+    {
+        CustomEntry[] existing = [new() { Alias = "output", Type = CustomEntryType.Folder }];
+
+        Assert.Equal("output", AliasGenerator.CreateDefault(@"C:\docs\output.txt", CustomEntryType.File, existing));
     }
 }

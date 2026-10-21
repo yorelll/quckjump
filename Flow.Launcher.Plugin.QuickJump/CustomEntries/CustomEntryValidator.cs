@@ -57,7 +57,15 @@ internal static partial class CustomEntryValidator
         return detectedType == type ? null : new QuickJumpError(QuickJumpErrorCode.PathTypeChanged);
     }
 
-    public static QuickJumpError? Validate(CustomEntry entry, IEnumerable<CustomEntry> existingEntries, string? originalAlias = null)
+    /// <summary>
+    /// Alias uniqueness is per type: one file and one folder entry may share an
+    /// alias. Two entries with the same alias and type are rejected.
+    /// </summary>
+    public static QuickJumpError? Validate(
+        CustomEntry entry,
+        IEnumerable<CustomEntry> existingEntries,
+        string? originalAlias = null,
+        CustomEntryType? originalType = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(existingEntries);
@@ -74,9 +82,15 @@ internal static partial class CustomEntryValidator
             return pathError;
         }
 
-        var duplicate = existingEntries.Any(existing =>
-            !string.Equals(existing.Alias, originalAlias, StringComparison.OrdinalIgnoreCase) &&
+        var duplicate = existingEntries.Any(existing => !IsOriginal(existing, originalAlias, originalType) &&
+            existing.Type == entry.Type &&
             string.Equals(existing.Alias, entry.Alias, StringComparison.OrdinalIgnoreCase));
         return duplicate ? new QuickJumpError(QuickJumpErrorCode.AliasExists, entry.Alias) : null;
     }
+
+    private static bool IsOriginal(CustomEntry entry, string? originalAlias, CustomEntryType? originalType) =>
+        originalAlias is not null &&
+        originalType is not null &&
+        entry.Type == originalType.Value &&
+        string.Equals(entry.Alias, originalAlias, StringComparison.OrdinalIgnoreCase);
 }

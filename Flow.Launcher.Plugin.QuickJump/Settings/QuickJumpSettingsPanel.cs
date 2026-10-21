@@ -93,14 +93,14 @@ internal sealed class QuickJumpSettingsPanel : UserControl, ILocalizedControl
     private void EnabledChanged(object sender, RoutedEventArgs args)
     {
         if (sender is not CheckBox { DataContext: CustomEntryRow row }) return;
-        if (!_repository.TrySetEnabled(row.Alias, row.Enabled, out var error)) { ShowError(error is null ? QuickJumpText.UpdateEnabledFailed() : QuickJumpText.Error(error)); ReloadEntries(); return; }
+        if (!_repository.TrySetEnabled(row.Alias, row.EntryType, row.Enabled, out var error)) { ShowError(error is null ? QuickJumpText.UpdateEnabledFailed() : QuickJumpText.Error(error)); ReloadEntries(); return; }
         ClearError();
     }
     private void AddEntry() { var dialog = new CustomEntryEditorDialog(_repository) { Owner = Window.GetWindow(this) }; if (dialog.ShowDialog() == true) ReloadEntries(); }
     private void EditSelected()
     {
         if (_grid.SelectedItem is not CustomEntryRow row) { ShowError(QuickJumpText.SelectEdit()); return; }
-        var entry = _repository.GetAll().FirstOrDefault(item => string.Equals(item.Alias, row.Alias, StringComparison.OrdinalIgnoreCase));
+        var entry = _repository.Find(row.Alias, row.EntryType);
         if (entry is null) { ShowError(QuickJumpText.EntryMissing()); ReloadEntries(); return; }
         var dialog = new CustomEntryEditorDialog(_repository, entry) { Owner = Window.GetWindow(this) }; if (dialog.ShowDialog() == true) ReloadEntries();
     }
@@ -108,9 +108,18 @@ internal sealed class QuickJumpSettingsPanel : UserControl, ILocalizedControl
     {
         if (_grid.SelectedItem is not CustomEntryRow row) { ShowError(QuickJumpText.SelectDelete()); return; }
         if (MessageBox.Show(QuickJumpText.DeleteConfirm(row.Alias), QuickJumpText.PluginName(), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        if (!_repository.Remove(row.Alias)) { ShowError(QuickJumpText.EntryMissing()); return; } ClearError(); ReloadEntries();
+        if (!_repository.Remove(row.Alias, row.EntryType)) { ShowError(QuickJumpText.EntryMissing()); return; } ClearError(); ReloadEntries();
     }
-    private void ReloadEntries() { _rows.Clear(); foreach (var entry in _repository.GetAll().OrderBy(entry => entry.Alias, StringComparer.CurrentCultureIgnoreCase)) _rows.Add(new CustomEntryRow(entry.Alias, entry.Path, QuickJumpText.Type(entry.Type), entry.Enabled)); }
+    private void ReloadEntries()
+    {
+        _rows.Clear();
+        foreach (var entry in _repository.GetAll()
+            .OrderBy(entry => entry.Alias, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(entry => entry.Type))
+        {
+            _rows.Add(new CustomEntryRow(entry.Alias, entry.Path, entry.Type, QuickJumpText.Type(entry.Type), entry.Enabled));
+        }
+    }
     private static Button CreateButton(string key, RoutedEventHandler handler) { var button = new Button { Margin = new Thickness(4, 0, 0, 0), MinWidth = 82, Padding = new Thickness(8, 4, 8, 4) }; button.SetResourceReference(ContentControl.ContentProperty, key); button.Click += handler; return button; }
     private static TextBlock LocalizedText(string key, double? fontSize, FontWeight? weight, Thickness margin) { var text = new TextBlock { Margin = margin }; text.SetResourceReference(TextBlock.TextProperty, key); if (fontSize is not null) text.FontSize = fontSize.Value; if (weight is not null) text.FontWeight = weight.Value; return text; }
     private void ShowError(string error) => _error.Text = error;
@@ -119,6 +128,18 @@ internal sealed class QuickJumpSettingsPanel : UserControl, ILocalizedControl
 
 internal sealed class CustomEntryRow
 {
-    public CustomEntryRow(string alias, string path, string type, bool enabled) { Alias = alias; Path = path; Type = type; Enabled = enabled; }
-    public string Alias { get; } public string Path { get; } public string Type { get; } public bool Enabled { get; set; }
+    public CustomEntryRow(string alias, string path, CustomEntryType entryType, string type, bool enabled)
+    {
+        Alias = alias;
+        Path = path;
+        EntryType = entryType;
+        Type = type;
+        Enabled = enabled;
+    }
+
+    public string Alias { get; }
+    public string Path { get; }
+    public CustomEntryType EntryType { get; }
+    public string Type { get; }
+    public bool Enabled { get; set; }
 }

@@ -4,7 +4,6 @@ using System.Threading;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.WindowsAndMessaging;
-using Flow.Launcher.Plugin.QuickJump.Diagnostics;
 
 namespace Flow.Launcher.Plugin.QuickJump.DialogNavigation;
 
@@ -16,15 +15,14 @@ internal static class DialogWindowLocator
     public static HWND CaptureVisibleFileDialog()
     {
         var candidates = GetEligibleVisibleFileDialogs();
-        QuickJumpDiagnostics.Info($"dialog candidates {DescribeVisibleDialogCandidates()} eligible={candidates.Count}");
         return candidates.Count == 1 ? candidates[0] : HWND.Null;
     }
 
     /// <summary>
     /// A generic <c>#32770</c> class is not sufficient: message boxes,
     /// properties windows, and unrelated application dialogs use it too. The
-    /// candidate must expose exactly one constrained modern address-bar path or
-    /// a verified legacy file-name structure before it may be activated.
+    /// candidate must expose a constrained modern address-bar path or a
+    /// verified legacy file-name structure before it may be activated.
     /// </summary>
     public static bool IsUsableFileDialog(HWND window) =>
         GetFileDialogKind(window) != FileDialogKind.None;
@@ -35,6 +33,35 @@ internal static class DialogWindowLocator
         PInvoke.IsWindowVisible(window)
             ? InspectStructure(window).Classify()
             : FileDialogKind.None;
+
+    public static FileDialogPurpose GetFileDialogPurpose(HWND window) =>
+        window != HWND.Null &&
+        PInvoke.IsWindow(window) &&
+        PInvoke.IsWindowVisible(window)
+            ? InspectStructure(window).ClassifyPurpose()
+            : FileDialogPurpose.Unknown;
+
+    /// <summary>Returns the qualified filename combo edit, never the address-band edit.</summary>
+    public static HWND FindFileNameEdit(HWND dialogHandle)
+    {
+        HWND found = HWND.Null;
+        PInvoke.EnumChildWindows(dialogHandle, EnumProc, 0);
+        return found;
+
+        BOOL EnumProc(HWND window, LPARAM _)
+        {
+            if (found != HWND.Null ||
+                !string.Equals(Utils.GetClassName(window), "ComboBoxEx32", StringComparison.Ordinal) ||
+                !HasQualifiedComboBoxEditPath(window) ||
+                HasAddressBandAncestor(window))
+            {
+                return true;
+            }
+
+            found = FindEditUnderComboEx(window);
+            return found == HWND.Null;
+        }
+    }
 
     /// <summary>
     /// Wait until the target dialog—not Flow—is the foreground window. A merely
@@ -75,20 +102,16 @@ internal static class DialogWindowLocator
                     DialogTargetSource.Foreground => foreground,
                     _ => enumerateTarget(),
                 };
-                QuickJumpDiagnostics.Info($"readiness retry={attempt + 1}/{plan.Attempts} source={source} target={target}");
             }
 
             bool targetIsUsable = isUsable(target);
-            var foregroundNow = foregroundWindow();
-            bool targetIsForeground = targetIsUsable && foregroundNow == target;
-            bool flowIsForegroundNow = isFlowForeground();
+            bool targetIsForeground = targetIsUsable && foregroundWindow() == target;
             var decision = DialogReadinessPlan.Decide(
                 targetIsUsable,
                 targetIsForeground,
-                flowIsForegroundNow,
+                isFlowForeground(),
                 mayActivateTarget: !activationAttempted,
                 retriesExhausted: attempt + 1 >= plan.Attempts);
-            QuickJumpDiagnostics.Info($"readiness retry={attempt + 1}/{plan.Attempts} target={target} usable={targetIsUsable} foreground={foregroundNow} targetForeground={targetIsForeground} flowForeground={flowIsForegroundNow} decision={decision}");
             if (decision == DialogReadinessDecision.Ready)
             {
                 return target;
@@ -96,14 +119,12 @@ internal static class DialogWindowLocator
             if (decision == DialogReadinessDecision.ActivateTarget)
             {
                 activationAttempted = true;
-                bool activated = activateTarget(target);
-                QuickJumpDiagnostics.Info($"readiness activation requested target={target} accepted={activated}");
+                _ = activateTarget(target);
                 // Verify foreground status on a future bounded retry; do not
                 // inject keys merely because SetForegroundWindow returned true.
             }
             if (decision == DialogReadinessDecision.Fail)
             {
-                QuickJumpDiagnostics.Warn($"readiness abort target={target} reason=retry-exhausted-or-unusable");
                 break;
             }
             if (attempt + 1 < plan.Attempts)
@@ -112,23 +133,6 @@ internal static class DialogWindowLocator
             }
         }
         return HWND.Null;
-    }
-
-    private static string DescribeVisibleDialogCandidates()
-    {
-        var descriptions = new List<string>();
-        PInvoke.EnumWindows(EnumProc, 0);
-        return descriptions.Count == 0 ? "visible32770=none" : $"visible32770=[{string.Join(",", descriptions)}]";
-
-        BOOL EnumProc(HWND window, LPARAM _)
-        {
-            if (!string.Equals(Utils.GetClassName(window), "#32770", StringComparison.Ordinal) || !PInvoke.IsWindowVisible(window))
-            {
-                return true;
-            }
-            descriptions.Add($"handle={window};kind={GetFileDialogKind(window)}");
-            return true;
-        }
     }
 
     private static List<HWND> GetEligibleVisibleFileDialogs()
@@ -156,11 +160,11 @@ internal static class DialogWindowLocator
         }
 
         int modernPaths = 0;
-        int legacyPaths = 0;
+        int fileNamePaths = 0;
         PInvoke.EnumChildWindows(dialogHandle, EnumProc, 0);
 
         bool hasStandardConfirmButton = PInvoke.GetDlgItem(dialogHandle, IdOk) != HWND.Null;
-        return new FileDialogStructure(windowClass, modernPaths, legacyPaths, hasStandardConfirmButton);
+        return new FileDialogStructure(windowClass, modernPaths, fileNamePaths, hasStandardConfirmButton);
 
         BOOL EnumProc(HWND window, LPARAM _)
         {
@@ -180,23 +184,22 @@ internal static class DialogWindowLocator
             }
             else
             {
-                legacyPaths++;
+                fileNamePaths++;
             }
             return true;
         }
     }
 
-    private static bool HasQualifiedComboBoxEditPath(HWND comboExHandle)
+    private static bool HasQualifiedComboBoxEditPath(HWND comboExHandle) =>
+        FindEditUnderComboEx(comboExHandle) != HWND.Null &&
+        AddressEditDiscovery.IsAddressEditPath(["ComboBoxEx32", "ComboBox", "Edit"]);
+
+    private static HWND FindEditUnderComboEx(HWND comboExHandle)
     {
         var comboHandle = PInvoke.FindWindowEx(comboExHandle, HWND.Null, "ComboBox", null);
-        if (comboHandle == HWND.Null)
-        {
-            return false;
-        }
-
-        var editHandle = PInvoke.FindWindowEx(comboHandle, HWND.Null, "Edit", null);
-        return editHandle != HWND.Null &&
-            AddressEditDiscovery.IsAddressEditPath(["ComboBoxEx32", "ComboBox", "Edit"]);
+        return comboHandle == HWND.Null
+            ? HWND.Null
+            : PInvoke.FindWindowEx(comboHandle, HWND.Null, "Edit", null);
     }
 
     private static bool HasAddressBandAncestor(HWND control)
