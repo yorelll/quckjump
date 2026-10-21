@@ -23,7 +23,7 @@ internal static class DialogWindowLocator
     /// original foreground standard dialog and its process so an elevated
     /// target can still produce an accurate explanation instead of silence.
     /// </summary>
-    public static FallbackDialogCapture CaptureForegroundStandardDialog()
+    public static unsafe FallbackDialogCapture CaptureForegroundStandardDialog()
     {
         var foreground = PInvoke.GetForegroundWindow();
         if (foreground == HWND.Null ||
