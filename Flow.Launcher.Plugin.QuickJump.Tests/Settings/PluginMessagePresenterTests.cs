@@ -64,21 +64,80 @@ public sealed class PluginMessagePresenterTests
     }
 
     [Fact]
-    public void Dialog_TopmostIsReleasedOnClosed()
+    public void ShowCore_ShowsTopmostDialogAndReusesItForNewMessages()
     {
-        var released = RunOnSta(() =>
+        var details = RunOnSta(() =>
         {
-            var dialog = new PluginMessageDialog("message") { Topmost = true };
-            bool whileOpen = dialog.Topmost;
-            dialog.Closed += (_, _) => dialog.Topmost = false;
-            dialog.Show();
-            dialog.Close();
-            return (whileOpen, dialog.Topmost);
+            var created = new System.Collections.Generic.List<PluginMessageDialog>();
+            var presenter = CreatePresenter(created);
+
+            presenter.ShowCore("a");
+            PumpDispatcher();
+            var first = Assert.Single(created);
+            bool visible = first.IsVisible;
+            bool topmost = first.Topmost;
+            string firstMessage = first.MessageText.Text;
+
+            presenter.ShowCore("b");
+            bool reused = created.Count == 1;
+            string updatedMessage = first.MessageText.Text;
+
+            return (visible, topmost, firstMessage, reused, updatedMessage);
         });
 
-        Assert.True(released.whileOpen);
-        Assert.False(released.Topmost);
+        Assert.True(details.visible);
+        Assert.True(details.topmost);
+        Assert.Equal("a", details.firstMessage);
+        Assert.True(details.reused);
+        Assert.Equal("b", details.updatedMessage);
     }
+
+    [Fact]
+    public void ShowCore_ReleasesTopmostOnCloseAndCreatesNewDialogAfterwards()
+    {
+        var details = RunOnSta(() =>
+        {
+            var created = new System.Collections.Generic.List<PluginMessageDialog>();
+            var presenter = CreatePresenter(created);
+
+            presenter.ShowCore("a");
+            PumpDispatcher();
+            var first = Assert.Single(created);
+            first.Close();
+            PumpDispatcher();
+            bool released = !first.Topmost;
+
+            presenter.ShowCore("c");
+            PumpDispatcher();
+            bool createdNew = created.Count == 2 && !ReferenceEquals(created[0], created[1]);
+            var second = created[1];
+            bool secondTopmost = second.Topmost;
+            bool secondVisible = second.IsVisible;
+            second.Close();
+
+            return (released, createdNew, secondTopmost, secondVisible);
+        });
+
+        Assert.True(details.released);
+        Assert.True(details.createdNew);
+        Assert.True(details.secondTopmost);
+        Assert.True(details.secondVisible);
+    }
+
+    private static PluginMessagePresenter CreatePresenter(System.Collections.Generic.List<PluginMessageDialog> created) =>
+        new(
+            dispatcher: () => Dispatcher.CurrentDispatcher,
+            createDialog: message =>
+            {
+                var dialog = new PluginMessageDialog(message);
+                created.Add(dialog);
+                return dialog;
+            },
+            schedule: action => action());
+
+    /// <summary>Lets WPF process Loaded/Closed callbacks without blocking the test.</summary>
+    private static void PumpDispatcher() =>
+        Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
 
     private static T RunOnSta<T>(Func<T> callback)
     {
